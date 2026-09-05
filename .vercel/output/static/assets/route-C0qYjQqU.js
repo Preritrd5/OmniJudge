@@ -1,1 +1,0 @@
-import{r as e}from"./useRouter-BLUsgERj.js";import{S as t}from"./index-B2-FEbOj.js";var n=e(),r=()=>(0,n.jsx)(t,{});export{r as component};
