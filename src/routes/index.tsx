@@ -116,13 +116,13 @@ function Landing() {
             blurb="Choose your team, select track, verify leader email, and attach pitch PDF for instant AI scoring."
             tone="cyan"
           />
-          <PortalCard
+          {/* <PortalCard
             to="/auth"
             tag="For Admins"
             title="Run the panel"
             blurb="Manage teams, review evaluations, generate 1-page/2-page PDFs, and declare winners on podium."
             tone="violet"
-          />
+          /> */}
         </div>
 
         {/* Marquee of capabilities */}
