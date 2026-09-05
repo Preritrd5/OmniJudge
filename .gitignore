@@ -32,3 +32,6 @@ dist-ssr
 *.sw?
 .vercel/
 scratch/
+
+# Environment variables
+.env
