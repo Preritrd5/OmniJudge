@@ -103,7 +103,7 @@ function AuthPage() {
           </button>
         </form>
 
-        <div className="mt-4 flex items-center justify-between rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-slate-300">
+        {/* <div className="mt-4 flex items-center justify-between rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-slate-300">
           <div>
             <span className="font-semibold text-amber-300">Default Admin Account:</span>
             <p className="font-mono text-[11px] text-slate-400">admin@admin.com</p>
@@ -118,7 +118,7 @@ function AuthPage() {
           >
             Autofill Credentials
           </button>
-        </div>
+        </div> */}
 
         <p className="mt-4 text-center text-xs text-slate-500">
           Admin access only. Team Leaders can access their dashboard on the{" "}
