@@ -146,16 +146,16 @@ The app uses two core tables:
 
 | ID | Criterion | Description |
 |----|-----------|-------------|
-| F1 | Innovation & Creativity | Originality, uniqueness, and creativity of the idea |
-| F2 | Problem Understanding & Relevance | Clarity of problem and alignment with the theme |
-| F3 | Feasibility & Practicality | Realistic implementation with available technologies |
-| F4 | Impact & Usefulness | Social, environmental, or economic impact |
-| F5 | User-Centric Approach | User needs, accessibility, and inclusivity |
-| F6 | Scalability & Future Scope | Ability to expand, sustain, and evolve |
-| F7 | Sustainability & Ethics | Eco-friendly approach and ethical considerations |
-| F8 | Presentation & Communication | Pitch clarity, structure, and confidence |
-| F9 | Teamwork & Collaboration | Coordination, participation, and team dynamics |
-| F10 | Business Viability | Market potential, affordability, and applicability |
+| F1 | Innovation & Creativity | Novelty of idea & creative problem-solving |
+| F2 | Technical Feasibility | Complexity, feasibility, and scalability |
+| F3 | User Experience & Design | UI/UX, accessibility, and inclusivity |
+| F4 | Impact & Usefulness | Problem-solution fit, potential impact, and multiple use cases |
+| F5 | Technical Execution | Prototype, code quality, and technology stack |
+| F6 | Sustainability & Future Scope | Long-term viability & eco-friendly practices |
+| F7 | Presentation & Communication | Clarity, pitch effectiveness, and Q&A handling |
+| F8 | Collaboration & Teamwork | Team dynamics & problem-solving approach |
+| F9 | Business Viability (if applicable) | Market potential, revenue model, and affordability |
+| F10 | Security & Privacy | Data protection & compliance with privacy regulations |
 
 ---
 

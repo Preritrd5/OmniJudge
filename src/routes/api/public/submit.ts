@@ -38,16 +38,41 @@ export const Route = createFileRoute("/api/public/submit")({
 
           const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-          // Only allow submissions for teams registered by the admin.
+          // Only allow submissions for teams registered.
           const { data: existing } = await supabaseAdmin
             .from("teams")
-            .select("id")
+            .select("id, name, leader_email")
             .eq("name", teamName)
             .maybeSingle();
           if (!existing?.id) {
-            return json({ error: "Team not registered. Please contact the admin." }, 400);
+            return json({ error: "Team not registered. Please register your team first." }, 400);
           }
           const teamId = existing.id;
+
+          // Save / update rich team requirements
+          try {
+            const { getTeamProfile, saveTeamProfile } = await import("@/lib/team-store.server");
+            const current = getTeamProfile(teamId);
+            const rawMembers = form.get("members");
+            let membersList = current?.members || [];
+            if (typeof rawMembers === "string") {
+              try { membersList = JSON.parse(rawMembers); } catch {}
+            }
+            saveTeamProfile({
+              teamId,
+              teamName,
+              leaderName: current?.leaderName || (typeof form.get("leaderName") === "string" ? String(form.get("leaderName")).trim() : "Team Leader"),
+              leaderEmail: current?.leaderEmail || existing.leader_email || (typeof form.get("leaderEmail") === "string" ? String(form.get("leaderEmail")).trim() : ""),
+              leaderPhone: typeof form.get("phone") === "string" ? String(form.get("phone")).trim() : current?.leaderPhone,
+              category: category || current?.category,
+              projectTitle: typeof form.get("projectTitle") === "string" ? String(form.get("projectTitle")).trim() : current?.projectTitle,
+              projectDescription: typeof form.get("projectDescription") === "string" ? String(form.get("projectDescription")).trim() : current?.projectDescription,
+              members: membersList,
+              createdAt: current?.createdAt || new Date().toISOString(),
+            });
+          } catch (profileErr) {
+            console.warn("[submit] Failed to update profile store:", profileErr);
+          }
 
           // Upload PDF
           const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(0, 120);

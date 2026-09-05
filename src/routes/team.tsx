@@ -4,130 +4,324 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import ChromeScene from "@/components/ChromeScene";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { verifyTeamLeaderEmail, listPublicTeams, getTopics } from "@/lib/admin.functions";
+import Footer from "@/components/Footer";
+import {
+  registerTeamLeader,
+  updateTeamRequirements,
+  getTeamDashboard,
+  getTopics,
+} from "@/lib/admin.functions";
 
 export const Route = createFileRoute("/team")({
   head: () => ({
     meta: [
-      { title: "Team Portal — Ideathon 2026 Submission" },
-      { name: "description", content: "Upload your Ideathon 2026 submission PDF. Your team's evaluation is handled by the judging panel." },
+      { title: "Team Portal — Ideathon 2026" },
+      { name: "description", content: "Team Leader portal: Register team, specify requirements, and submit proposal PDF for AI and live jury evaluation." },
     ],
   }),
   component: TeamPortal,
 });
 
+interface MemberItem {
+  id: string;
+  name: string;
+  role: string;
+}
+
 function TeamPortal() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const verifyEmailFn = useServerFn(verifyTeamLeaderEmail);
-  const listPublicTeamsFn = useServerFn(listPublicTeams);
+  const registerLeaderFn = useServerFn(registerTeamLeader);
+  const updateReqsFn = useServerFn(updateTeamRequirements);
+  const getDashboardFn = useServerFn(getTeamDashboard);
   const getTopicsFn = useServerFn(getTopics);
 
-  // Stepped Flow State
-  const [step, setStep] = useState<"team" | "topic" | "verify" | "upload">("team");
-  const [selectedTeamId, setSelectedTeamId] = useState("");
-  const [teamName, setTeamName] = useState("");
-  const [email, setEmail] = useState("");
-  const [verifyingEmail, setVerifyingEmail] = useState(false);
-  const [emailVerified, setEmailVerified] = useState(false);
-  
-  const [selectedTopic, setSelectedTopic] = useState("");
-  const [topics, setTopics] = useState<{id: string, name: string}[]>([]);
-  const [topicsLoading, setTopicsLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<"register" | "signin">("register");
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [sessionLeaderName, setSessionLeaderName] = useState<string>("");
 
+  // Registration Form State
+  const [regName, setRegName] = useState("");
+  const [regTeam, setRegTeam] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regConfirmPassword, setRegConfirmPassword] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
+
+  // Sign In Form State
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Team Dashboard State
+  const [teamData, setTeamData] = useState<any>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+
+  // Requirements Form State
+  const [selectedTopic, setSelectedTopic] = useState("");
+  const [projectTitle, setProjectTitle] = useState("");
+  const [projectDescription, setProjectDescription] = useState("");
+  const [leaderPhone, setLeaderPhone] = useState("");
+  const [members, setMembers] = useState<MemberItem[]>([]);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberRole, setNewMemberRole] = useState("");
+  const [reqSaveLoading, setReqSaveLoading] = useState(false);
+  const [reqSaveSuccess, setReqSaveSuccess] = useState(false);
+
+  // Topics list
+  const [topics, setTopics] = useState<{ id: string; name: string }[]>([]);
+
+  // PDF Upload State
+  const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [done, setDone] = useState<{ ok: boolean; message: string } | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [teams, setTeams] = useState<{ id: string; name: string; emailHint?: string }[]>([]);
-  const [teamsLoading, setTeamsLoading] = useState(true);
-  const [emailHint, setEmailHint] = useState("");
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadDone, setUploadDone] = useState<{ ok: boolean; message: string } | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
-    getTopicsFn().then(res => {
-      setTopics(res.topics || []);
-      setTopicsLoading(false);
-    }).catch(() => setTopicsLoading(false));
+    getTopicsFn()
+      .then((res) => setTopics(res.topics || []))
+      .catch(() => {});
+
+    const savedEmail = localStorage.getItem("ideathon_leader_email");
+    const savedName = localStorage.getItem("ideathon_leader_name");
+    if (savedEmail) {
+      setSessionEmail(savedEmail);
+      if (savedName) setSessionLeaderName(savedName);
+      loadDashboard(savedEmail);
+    } else {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user?.email) {
+          setSessionEmail(data.user.email);
+          const metaName = (data.user.user_metadata as any)?.leader_name || "";
+          if (metaName) setSessionLeaderName(metaName);
+          loadDashboard(data.user.email);
+        }
+      });
+    }
   }, []);
 
-  const loadTeams = async () => {
-    setTeamsLoading(true);
+  const loadDashboard = async (email: string) => {
+    setDashboardLoading(true);
     try {
-      const data = await listPublicTeamsFn();
-      setTeams(data || []);
-    } catch {
-      // fallback: try plain supabase
-      const { data } = await supabase.from("teams").select("id, name").order("name");
-      setTeams(data || []);
+      const res = await getDashboardFn({ data: { email } });
+      if (res.found && res.team) {
+        setTeamData(res.team);
+        const p = res.team.profile || {};
+        if (p.leaderName) setSessionLeaderName(p.leaderName);
+        if (p.category) setSelectedTopic(p.category);
+        if (p.projectTitle) setProjectTitle(p.projectTitle);
+        if (p.projectDescription) setProjectDescription(p.projectDescription);
+        if (p.leaderPhone) setLeaderPhone(p.leaderPhone);
+        if (Array.isArray(p.members)) {
+          setMembers(
+            p.members.map((m: any, idx: number) => {
+              if (typeof m === "string") {
+                const parts = m.split(" - ");
+                return { id: String(idx), name: parts[0] || m, role: parts[1] || "Core Member" };
+              }
+              return { id: String(idx), name: m.name || "", role: m.role || "Core Member" };
+            })
+          );
+        }
+      }
+    } catch (e: any) {
+      console.error("Dashboard error:", e);
+    } finally {
+      setDashboardLoading(false);
     }
-    setTeamsLoading(false);
   };
-  useEffect(() => { loadTeams(); }, []);
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+
+    if (regPassword !== regConfirmPassword) {
+      setRegError("Passwords do not match.");
+      return;
+    }
+
+    setRegLoading(true);
+    try {
+      const res = await registerLeaderFn({
+        data: {
+          leaderName: regName.trim(),
+          teamName: regTeam.trim(),
+          email: regEmail.trim(),
+          password: regPassword,
+          phone: regPhone.trim() || undefined,
+        },
+      });
+
+      try {
+        const { data: currentAuth } = await supabase.auth.getUser();
+        if (currentAuth?.user?.email !== "admin@admin.com") {
+          await supabase.auth.signInWithPassword({
+            email: regEmail.trim(),
+            password: regPassword,
+          });
+        }
+      } catch {}
+
+      localStorage.setItem("ideathon_leader_email", res.leaderEmail);
+      localStorage.setItem("ideathon_leader_name", res.leaderName);
+      setSessionEmail(res.leaderEmail);
+      setSessionLeaderName(res.leaderName);
+      setLeaderPhone(regPhone.trim());
+      await loadDashboard(res.leaderEmail);
+    } catch (e: any) {
+      setRegError(e?.message || "Registration failed. Please try again.");
+    } finally {
+      setRegLoading(false);
+    }
+  };
+
+  const handleSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    setLoginLoading(true);
+
+    try {
+      const { data: currentAuth } = await supabase.auth.getUser();
+      if (currentAuth?.user?.email !== "admin@admin.com") {
+        await supabase.auth.signInWithPassword({
+          email: loginEmail.trim(),
+          password: loginPassword,
+        });
+      }
+
+      const email = loginEmail.trim();
+      const res = await getDashboardFn({ data: { email } });
+      if (!res.found) {
+        throw new Error("No registered team found for this email address. Please register as a team leader.");
+      }
+
+      localStorage.setItem("ideathon_leader_email", email);
+      if (res.team?.profile?.leaderName) {
+        localStorage.setItem("ideathon_leader_name", res.team.profile.leaderName);
+        setSessionLeaderName(res.team.profile.leaderName);
+      }
+      setSessionEmail(email);
+      setTeamData(res.team);
+      await loadDashboard(email);
+    } catch (e: any) {
+      setLoginError(e?.message || "Sign in failed. Check your email and password.");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    localStorage.removeItem("ideathon_leader_email");
+    localStorage.removeItem("ideathon_leader_name");
+    const { data: currentAuth } = await supabase.auth.getUser();
+    if (currentAuth?.user?.email !== "admin@admin.com") {
+      await supabase.auth.signOut();
+    }
+    setSessionEmail(null);
+    setTeamData(null);
+    setUploadDone(null);
+    setFile(null);
+  };
+
+  const handleSaveRequirements = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!teamData?.id || !sessionEmail) return;
+    setReqSaveLoading(true);
+    setReqSaveSuccess(false);
+
+    try {
+      const memberStrings = members.map((m) => `${m.name.trim()} - ${m.role.trim()}`);
+      await updateReqsFn({
+        data: {
+          teamId: teamData.id,
+          leaderEmail: sessionEmail,
+          category: selectedTopic,
+          projectTitle: projectTitle.trim(),
+          projectDescription: projectDescription.trim(),
+          leaderPhone: leaderPhone.trim(),
+          members: memberStrings,
+        },
+      });
+      setReqSaveSuccess(true);
+      setTimeout(() => setReqSaveSuccess(false), 3000);
+      loadDashboard(sessionEmail);
+    } catch (e: any) {
+      alert(e?.message || "Failed to save requirements.");
+    } finally {
+      setReqSaveLoading(false);
+    }
+  };
+
+  const addMember = () => {
+    if (!newMemberName.trim()) return;
+    setMembers((prev) => [
+      ...prev,
+      {
+        id: String(Date.now()),
+        name: newMemberName.trim(),
+        role: newMemberRole.trim() || "Core Member",
+      },
+    ]);
+    setNewMemberName("");
+    setNewMemberRole("");
+  };
+
+  const removeMember = (id: string) => {
+    setMembers((prev) => prev.filter((m) => m.id !== id));
+  };
 
   const onPick = (f: File | null) => {
     if (!f) return;
     if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
-      setErr("Please upload a PDF file.");
+      setUploadError("Please upload a PDF file only.");
       return;
     }
-    setErr(null);
+    setUploadError(null);
     setFile(f);
   };
 
-  const handleVerifyEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTeamId || !email.trim()) return;
-    setVerifyingEmail(true);
-    setErr(null);
-    try {
-      const res = await verifyEmailFn({ data: { teamId: selectedTeamId, email: email.trim() } });
-      if (res.verified) {
-        setEmailVerified(true);
-        setTimeout(() => {
-          setStep("upload");
-        }, 1200);
-      } else {
-        setErr("Incorrect team leader email. Please try again.");
-      }
-    } catch (e: any) {
-      setErr(e?.message || "Verification failed");
-    } finally {
-      setVerifyingEmail(false);
-    }
-  };
+  const handleSubmitProposal = async () => {
+    if (!teamData?.name || !file) return;
+    setUploadLoading(true);
+    setUploadError(null);
+    setUploadDone(null);
 
-  const submit = async () => {
-    if (!teamName.trim() || !file) return;
-    setLoading(true);
-    setErr(null);
-    setDone(null);
     try {
+      const memberStrings = members.map((m) => `${m.name.trim()} - ${m.role.trim()}`);
       const fd = new FormData();
-      fd.append("teamName", teamName.trim());
+      fd.append("teamName", teamData.name);
       fd.append("category", selectedTopic);
+      fd.append("leaderName", sessionLeaderName || teamData.profile?.leaderName || "Team Leader");
+      fd.append("leaderEmail", sessionEmail || "");
+      fd.append("phone", leaderPhone);
+      fd.append("projectTitle", projectTitle);
+      fd.append("projectDescription", projectDescription);
+      fd.append("members", JSON.stringify(memberStrings));
       fd.append("file", file, file.name);
+
       const res = await fetch("/api/public/submit", { method: "POST", body: fd });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error || `Submission failed (${res.status})`);
-      setDone({ ok: true, message: j.warning || "Your submission was received and is being evaluated by the panel." });
+
+      setUploadDone({
+        ok: true,
+        message: "Your proposal PDF has been submitted and queued for evaluation!",
+      });
       setFile(null);
-      loadTeams();
+      if (sessionEmail) loadDashboard(sessionEmail);
     } catch (e: any) {
-      setErr(e?.message || "Submission failed");
+      setUploadError(e?.message || "Submission failed");
     } finally {
-      setLoading(false);
+      setUploadLoading(false);
     }
   };
 
-  const resetFlow = () => {
-    setDone(null);
-    setStep("team");
-    setTeamName("");
-    setSelectedTeamId("");
-    setSelectedTopic("");
-    setEmail("");
-    setEmailVerified(false);
-  };
+  const latestSub = teamData?.submissions?.[0] || null;
+  const resultData = latestSub?.result || null;
+  const criteriaList = Array.isArray(resultData?.criteria) ? resultData.criteria : [];
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#08070f] text-slate-100">
@@ -139,365 +333,651 @@ function TeamPortal() {
       <div className="pointer-events-none absolute inset-0 -z-20 opacity-[0.035]" style={{ backgroundImage: "radial-gradient(circle, #fff 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
       
       <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
-        <Link to="/" className="flex items-center gap-2.5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg border border-amber-300/30 bg-amber-300/10 font-serif text-amber-300">I</span>
-          <span className="text-xs uppercase tracking-[0.3em] text-amber-300/80 font-semibold">Ideathon 2026</span>
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="relative">
+            <div className="absolute -inset-1 rounded-xl bg-amber-300/30 opacity-70 blur group-hover:opacity-100 transition" />
+            <img
+              src="/logo.png"
+              alt="INNOVEDGE Logo"
+              className="relative h-10 w-10 object-contain rounded-xl drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] transform group-hover:scale-105 transition"
+            />
+          </div>
+          <div>
+            <div className="font-serif text-lg font-bold tracking-tight text-slate-100 group-hover:text-amber-300 transition">
+              Ideathon 2026
+            </div>
+            <div className="text-[10px] uppercase tracking-widest text-slate-400">Team Leader Portal</div>
+          </div>
         </Link>
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          <Link to="/" className="text-xs text-slate-400 hover:text-slate-200">← Back</Link>
+          {sessionEmail && (
+            <button
+              onClick={handleSignOut}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition"
+            >
+              Sign Out
+            </button>
+          )}
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-6 pb-24 pt-10">
-        <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-300/5 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-amber-300/90 mb-6">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-300" /> Team Portal
-        </div>
-        
-        {/* Step Indicator */}
-        {!done && (
-          <div className="flex items-center justify-between w-full max-w-lg mx-auto mb-10 bg-white/[0.02] border border-white/5 rounded-2xl p-4 backdrop-blur-md">
-            <button 
-              onClick={() => { if (step !== "team") { setStep("team"); } }} 
-              disabled={loading}
-              className="flex items-center gap-2 text-left disabled:opacity-50"
-            >
-              <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${step === "team" ? "bg-amber-300 text-black scale-110 shadow-[0_0_12px_rgba(251,191,36,0.5)]" : selectedTeamId ? "bg-emerald-500 text-black" : "bg-white/10 text-slate-400"}`}>
-                {selectedTeamId ? "✓" : "1"}
-              </span>
-              <span className={`hidden sm:inline text-[10px] uppercase tracking-wider font-semibold ${step === "team" ? "text-amber-300" : selectedTeamId ? "text-emerald-400" : "text-slate-500"}`}>Team</span>
-            </button>
-            <div className="h-px flex-1 bg-white/10 mx-2 sm:mx-3" />
-            <button 
-              onClick={() => { if (selectedTeamId && step !== "topic") { setStep("topic"); } }} 
-              disabled={loading || !selectedTeamId}
-              className="flex items-center gap-2 text-left disabled:opacity-50"
-            >
-              <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${step === "topic" ? "bg-amber-300 text-black scale-110 shadow-[0_0_12px_rgba(251,191,36,0.5)]" : selectedTopic ? "bg-emerald-500 text-black" : "bg-white/10 text-slate-400"}`}>
-                {selectedTopic ? "✓" : "2"}
-              </span>
-              <span className={`hidden sm:inline text-[10px] uppercase tracking-wider font-semibold ${step === "topic" ? "text-amber-300" : selectedTopic ? "text-emerald-400" : "text-slate-500"}`}>Topic</span>
-            </button>
-            <div className="h-px flex-1 bg-white/10 mx-2 sm:mx-3" />
-            <button 
-              onClick={() => { if (selectedTopic && step !== "verify" && step !== "upload") { setStep("verify"); } }}
-              disabled={loading || !selectedTopic}
-              className="flex items-center gap-2 text-left disabled:opacity-50"
-            >
-              <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${step === "verify" ? "bg-amber-300 text-black scale-110 shadow-[0_0_12px_rgba(251,191,36,0.5)]" : emailVerified ? "bg-emerald-500 text-black" : "bg-white/10 text-slate-400"}`}>
-                {emailVerified ? "✓" : "3"}
-              </span>
-              <span className={`hidden sm:inline text-[10px] uppercase tracking-wider font-semibold ${step === "verify" ? "text-amber-300" : emailVerified ? "text-emerald-400" : "text-slate-500"}`}>Verify</span>
-            </button>
-            <div className="h-px flex-1 bg-white/10 mx-2 sm:mx-3" />
-            <div className="flex items-center gap-2 text-left">
-              <span className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${step === "upload" ? "bg-amber-300 text-black scale-110 shadow-[0_0_12px_rgba(251,191,36,0.5)]" : "bg-white/10 text-slate-400"}`}>4</span>
-              <span className={`hidden sm:inline text-[10px] uppercase tracking-wider font-semibold ${step === "upload" ? "text-amber-300" : "text-slate-500"}`}>Upload</span>
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+        {!sessionEmail && (
+          <div className="mx-auto max-w-md">
+            <div className="flex rounded-xl border border-white/10 bg-white/[0.03] p-1 mb-6 backdrop-blur">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("register");
+                  setRegError(null);
+                }}
+                className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
+                  authMode === "register"
+                    ? "bg-amber-300 text-black shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                👑 Register Team (Leader)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("signin");
+                  setLoginError(null);
+                }}
+                className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
+                  authMode === "signin"
+                    ? "bg-amber-300 text-black shadow-md"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                🔑 Leader Sign In
+              </button>
             </div>
-          </div>
-        )}
 
-        <h1 className="mt-3 font-serif text-5xl tracking-tight sm:text-6xl">Submit your idea.</h1>
-        <p className="mt-4 text-base text-slate-400">
-          Select your team, verify using your team leader's email address, and submit your proposal PDF.
-        </p>
-
-        {done ? (
-          <div className="mt-10 rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-8 text-center animate-fade-in-up">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-400/15 text-emerald-300">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-7 w-7">
-                <path d="M5 12l5 5L20 7" strokeLinecap="round" strokeLinejoin="round" className="animate-draw-checkmark" />
-              </svg>
-            </div>
-            <h2 className="mt-4 font-serif text-2xl">Submission received</h2>
-            <p className="mt-2 text-sm text-slate-300">{done.message}</p>
-            <button
-              onClick={resetFlow}
-              className="mt-6 rounded-lg border border-white/15 px-5 py-2.5 text-xs text-slate-200 hover:bg-white/5 hover:border-white/30"
-            >
-              Submit another
-            </button>
-          </div>
-        ) : (
-          <div className="mt-10 space-y-6">
-            
-            {/* STEP 1: SELECT TEAM */}
-            {step === "team" && (
-              <div className="animate-fade-in-up space-y-4">
-                <div className="flex items-baseline justify-between">
-                  <label className="text-xs uppercase tracking-wider text-slate-400">Select your team</label>
-                  <span className="text-[10px] text-slate-500">{teams.length} registered</span>
-                </div>
-                {teamsLoading ? (
-                  <p className="text-sm text-slate-500">Loading teams…</p>
-                ) : teams.length === 0 ? (
-                  <div className="rounded-lg border border-white/10 bg-black/30 p-4 text-sm text-slate-400">
-                    No teams registered yet. Please contact the admin.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {teams.map((t) => {
-                      const active = selectedTeamId === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          disabled={loading}
-                          onClick={() => {
-                            setSelectedTeamId(t.id);
-                            setTeamName(t.name);
-                            setEmailHint((t as any).emailHint || "");
-                            // Auto-advance to topic step
-                            setTimeout(() => setStep("topic"), 300);
-                          }}
-                          aria-pressed={active}
-                          className={`group relative rounded-xl border px-3 py-3 text-left transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-                            active
-                              ? "border-amber-300/70 bg-amber-300/10 shadow-[0_0_15px_rgba(251,191,36,0.15)]"
-                              : "border-white/10 bg-white/[0.02] hover:border-white/25 hover:bg-white/[0.05]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-md font-serif text-xs ${active ? "bg-amber-300 text-black font-bold" : "bg-white/10 text-amber-300"}`}>
-                              {t.name.slice(0, 1).toUpperCase()}
-                            </span>
-                            <span className="truncate text-sm font-medium text-slate-100">{t.name}</span>
-                          </div>
-                          {active && (
-                            <span className="absolute right-2 top-2 text-amber-300" aria-hidden="true">✓</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* STEP 1.5: SELECT TOPIC */}
-            {step === "topic" && (
-              <div className="animate-fade-in-up space-y-4">
-                <div className="flex items-baseline justify-between">
-                  <label className="text-xs uppercase tracking-wider text-slate-400">Select a Topic/Category</label>
-                  <button 
-                    onClick={() => setStep("team")} 
-                    className="text-[10px] text-amber-300 hover:text-amber-200 uppercase tracking-wider"
-                  >
-                    ← Back
-                  </button>
-                </div>
-                {topicsLoading ? (
-                  <p className="text-sm text-slate-500">Loading topics…</p>
-                ) : topics.length === 0 ? (
-                  <div className="rounded-lg border border-white/10 bg-black/30 p-4 text-sm text-slate-400">
-                    No topics available.
-                  </div>
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {topics.map((t) => {
-                      const active = selectedTopic === t.name;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          disabled={loading}
-                          onClick={() => {
-                            setSelectedTopic(t.name);
-                            setTimeout(() => setStep("verify"), 300);
-                          }}
-                          aria-pressed={active}
-                          className={`group relative rounded-xl border px-4 py-4 text-left transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] ${
-                            active
-                              ? "border-amber-300/70 bg-amber-300/10 shadow-[0_0_15px_rgba(251,191,36,0.15)]"
-                              : "border-white/10 bg-white/[0.02] hover:border-white/25 hover:bg-white/[0.05]"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <span className="text-xl">{active ? "🎯" : "📌"}</span>
-                            <span className={`text-sm font-medium ${active ? "text-amber-300" : "text-slate-100"}`}>{t.name}</span>
-                          </div>
-                          {active && (
-                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-amber-300" aria-hidden="true">✓</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* STEP 2: VERIFY LEADER EMAIL */}
-            {step === "verify" && (
-              <div className="animate-fade-in-up space-y-4">
-                <div className="flex items-baseline justify-between">
-                  <label className="text-xs uppercase tracking-wider text-slate-400">Verify Team Leader Email</label>
-                  <button 
-                    onClick={() => setStep("topic")} 
-                    className="text-[10px] text-amber-300 hover:text-amber-200 uppercase tracking-wider"
-                  >
-                    ← Back
-                  </button>
-                </div>
-                
-                <form onSubmit={handleVerifyEmail} className="border border-white/10 rounded-2xl p-6 bg-white/[0.02] backdrop-blur-md space-y-4">
-                  <p className="text-xs text-slate-400">
-                    To upload proposals for <span className="text-slate-100 font-semibold">{teamName}</span>, please verify using the registered email of your team leader.
+            {authMode === "register" && (
+              <div className="rounded-2xl border border-white/10 bg-[#0e0d1a]/80 p-6 backdrop-blur-xl shadow-2xl">
+                <div className="mb-4">
+                  <span className="rounded bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300 border border-amber-300/20">
+                    Leader Registration Only
+                  </span>
+                  <h1 className="font-serif text-2xl font-bold text-slate-100 mt-2">
+                    Register Your Team
+                  </h1>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Only the team leader registers with their name, email, and password. You will then access your team's private workspace.
                   </p>
-                  {emailHint && (
-                    <div className="flex items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-2">
-                      <svg className="h-3.5 w-3.5 shrink-0 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <p className="text-[11px] text-amber-200/80">
-                        Hint: your team leader's email looks like{" "}
-                        <span className="font-mono font-semibold text-amber-300">{emailHint}</span>
-                      </p>
+                </div>
+
+                <form onSubmit={handleRegister} className="space-y-3.5">
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      Team Leader Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Jane Doe"
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      Team Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. QuantumInnovators"
+                      value={regTeam}
+                      onChange={(e) => setRegTeam(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      Leader Email ID *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="leader@gmail.com"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                        Password *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        placeholder="••••••••"
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                        Confirm *
+                      </label>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        placeholder="••••••••"
+                        value={regConfirmPassword}
+                        onChange={(e) => setRegConfirmPassword(e.target.value)}
+                        className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      Phone Number (Optional)
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="+91 98765 43210"
+                      value={regPhone}
+                      onChange={(e) => setRegPhone(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                    />
+                  </div>
+
+                  {regError && (
+                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
+                      {regError}
                     </div>
                   )}
 
-                  {emailVerified ? (
-                    <div className="flex flex-col items-center justify-center space-y-3 py-6">
-                      <div className="h-14 w-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-7 w-7">
-                          <path d="M5 12l5 5L20 7" strokeLinecap="round" strokeLinejoin="round" className="animate-draw-checkmark" />
-                        </svg>
-                      </div>
-                      <p className="text-xs font-semibold text-emerald-400 animate-pulse">Email verified! Loading upload zone…</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div>
-                        <input
-                          type="email"
-                          required
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="leader@yourteam.com"
-                          className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-300/60 focus-visible:ring-2 focus-visible:ring-amber-300/40"
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={verifyingEmail || !email.trim()}
-                        className="w-full rounded-xl bg-amber-300 py-3 text-sm font-semibold text-black hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                      >
-                        {verifyingEmail ? "Verifying email…" : "Verify Email"}
-                      </button>
-                    </>
-                  )}
+                  <button
+                    type="submit"
+                    disabled={regLoading}
+                    className="w-full rounded-lg bg-amber-300 py-2.5 text-sm font-bold text-black hover:bg-amber-200 transition shadow-[0_0_20px_rgba(251,191,36,0.3)] disabled:opacity-50"
+                  >
+                    {regLoading ? "Registering Team…" : "Register Team & Open Workspace →"}
+                  </button>
                 </form>
               </div>
             )}
 
-            {/* STEP 3: UPLOAD FILE */}
-            {step === "upload" && (
-              <div className="animate-fade-in-up space-y-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 border border-emerald-500/20">
-                      ✓ {teamName}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-300/10 px-2 py-0.5 text-[10px] font-medium text-amber-300 border border-amber-300/20">
-                      {selectedTopic}
-                    </span>
-                  </div>
-                  <button 
-                    onClick={() => { setStep("verify"); setEmailVerified(false); }} 
-                    className="text-[10px] text-slate-400 hover:text-slate-200 uppercase tracking-wider"
-                  >
-                    ← Back to verification
-                  </button>
+            {authMode === "signin" && (
+              <div className="rounded-2xl border border-white/10 bg-[#0e0d1a]/80 p-6 backdrop-blur-xl shadow-2xl">
+                <div className="mb-4">
+                  <h1 className="font-serif text-2xl font-bold text-slate-100">
+                    Leader Sign In
+                  </h1>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Sign in with your registered email and password to access your team requirements and proposal status.
+                  </p>
                 </div>
 
-                <div
-                  onDragOver={(e) => {
-                    if (loading) return;
-                    e.preventDefault();
-                    setDragOver(true);
-                  }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={(e) => {
-                    if (loading) return;
-                    e.preventDefault();
-                    setDragOver(false);
-                    onPick(e.dataTransfer.files?.[0] ?? null);
-                  }}
-                  className={`rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-300 ${
-                    dragOver ? "border-amber-300/70 bg-amber-300/5 scale-[1.01]" : "border-white/15 bg-white/[0.02] hover:border-white/30"
-                  } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
-                >
-                  <input
-                    ref={inputRef}
-                    type="file"
-                    disabled={loading}
-                    accept="application/pdf,.pdf"
-                    className="hidden"
-                    onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-                  />
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-300/15 text-amber-300 animate-pulse-ring">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-7 w-7">
-                      <path d="M12 16V4m0 0l-4 4m4-4l4 4" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      Leader Email ID
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="leader@gmail.com"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                    />
                   </div>
-                  <h2 className="mt-4 font-serif text-xl">Attach submission PDF</h2>
-                  <p className="mt-1 text-sm text-slate-400">Drag &amp; drop, or click to browse.</p>
-                  <button
-                    type="button"
-                    disabled={loading}
-                    onClick={() => inputRef.current?.click()}
-                    className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm text-slate-100 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:opacity-50"
-                  >
-                    Choose PDF
-                  </button>
 
-                  {file && (
-                    <div className="mt-6 flex flex-col items-center gap-3 animate-fade-in-up">
-                      <div className="inline-flex items-center gap-3 rounded-lg border border-white/10 bg-black/40 px-4 py-2.5 text-left">
-                        <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">PDF</span>
-                        <span className="text-sm">{file.name}</span>
-                        <span className="text-xs text-slate-400">{(file.size / 1024).toFixed(1)} KB</span>
-                        <button
-                          type="button"
-                          disabled={loading}
-                          onClick={() => setFile(null)}
-                          aria-label={`Remove ${file.name}`}
-                          className="rounded text-xs text-slate-300 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      
-                      <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-semibold">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="h-4 w-4">
-                          <path d="M5 12l5 5L20 7" strokeLinecap="round" strokeLinejoin="round" className="animate-draw-checkmark" />
-                        </svg>
-                        <span>PDF Loaded &amp; Verified</span>
-                      </div>
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                    />
+                  </div>
+
+                  {loginError && (
+                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
+                      {loginError}
                     </div>
                   )}
-                </div>
 
-                <button
-                  disabled={!teamName.trim() || !file || loading}
-                  onClick={submit}
-                  className="w-full rounded-xl bg-amber-300 py-4 text-sm font-semibold text-black transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400 shadow-[0_4px_20px_-5px_rgba(251,191,36,0.3)] hover:shadow-[0_8px_25px_-5px_rgba(251,191,36,0.5)]"
-                >
-                  {loading ? "Submitting & evaluating…" : "Submit Idea"}
-                </button>
-                <p className="text-center text-xs text-slate-500">PDF only · 15MB max</p>
+                  <button
+                    type="submit"
+                    disabled={loginLoading}
+                    className="w-full rounded-lg bg-amber-300 py-2.5 text-sm font-bold text-black hover:bg-amber-200 transition shadow-[0_0_20px_rgba(251,191,36,0.3)] disabled:opacity-50"
+                  >
+                    {loginLoading ? "Signing In…" : "Sign In to Workspace →"}
+                  </button>
+                </form>
               </div>
             )}
-
-            {err && (
-              <div className="rounded-md border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-rose-200 animate-fade-in-up">
-                {err}
-              </div>
-            )}
-
           </div>
         )}
+
+        {sessionEmail && (
+          <div className="space-y-8">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-amber-300/15 px-2 py-0.5 text-[10px] font-bold text-amber-300 border border-amber-300/30">
+                    👑 Team Leader Workspace
+                  </span>
+                  <span className="text-xs text-emerald-400 font-medium">● Active Session</span>
+                </div>
+                <h1 className="font-serif text-2xl font-bold text-slate-100 mt-1">
+                  {teamData?.name || "Your Team"}
+                </h1>
+                <p className="text-xs text-slate-400">
+                  Leader: <span className="text-slate-200 font-semibold">{sessionLeaderName || teamData?.profile?.leaderName || "Team Leader"}</span> ({sessionEmail})
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => loadDashboard(sessionEmail)}
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs text-slate-300 hover:bg-white/10"
+                >
+                  🔄 Refresh Status
+                </button>
+                <button
+                  onClick={handleSignOut}
+                  className="rounded-lg border border-rose-400/30 px-3 py-1.5 text-xs text-rose-300 hover:bg-rose-500/10"
+                >
+                  Log Out
+                </button>
+              </div>
+            </div>
+
+            {dashboardLoading && (
+              <p className="text-center text-xs text-slate-400">Loading your workspace…</p>
+            )}
+
+            {/* SECTION A: TEAM REQUIREMENTS */}
+            <section className="rounded-2xl border border-white/10 bg-[#0e0d1a]/90 p-6 backdrop-blur-xl shadow-xl space-y-6">
+              <div>
+                <div className="flex items-center justify-between">
+                  <h2 className="font-serif text-xl font-bold text-slate-100">
+                    Step 1: Team &amp; Project Requirements
+                  </h2>
+                  <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">
+                    Leader Managed • Sent to Admin
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Specify your innovation track, project summary, and team members. All details are saved and provided directly to the judging panel.
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveRequirements} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      Category / Innovation Track *
+                    </label>
+                    <select
+                      value={selectedTopic}
+                      onChange={(e) => setSelectedTopic(e.target.value)}
+                      required
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-200 outline-none focus:border-amber-300/60"
+                    >
+                      <option value="">Select track…</option>
+                      {topics.map((t) => (
+                        <option key={t.id} value={t.name}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                      Leader Phone / Contact
+                    </label>
+                    <input
+                      type="tel"
+                      value={leaderPhone}
+                      onChange={(e) => setLeaderPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                    Project / Solution Title *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={projectTitle}
+                    onChange={(e) => setProjectTitle(e.target.value)}
+                    placeholder="e.g. Next-Gen Autonomous Precision Agriculture System"
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
+                    Brief Problem Statement &amp; Solution Overview
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={projectDescription}
+                    onChange={(e) => setProjectDescription(e.target.value)}
+                    placeholder="Describe the real-world problem you are addressing and the core technical architecture of your solution..."
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-slate-200 outline-none focus:border-amber-300/60 resize-none"
+                  />
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                        Team Members
+                      </span>
+                      <p className="text-[11px] text-slate-400">
+                        List each member of your team (excluding leader):
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-400">{members.length + 1} Total (Leader + {members.length})</span>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-xs">
+                    <span className="font-semibold text-amber-200">
+                      👑 {sessionLeaderName || teamData?.profile?.leaderName || "Team Leader"}
+                    </span>
+                    <span className="text-[10px] text-amber-300/80 uppercase tracking-wider">Team Leader</span>
+                  </div>
+
+                  {members.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs"
+                    >
+                      <div>
+                        <span className="font-medium text-slate-200">{m.name}</span>
+                        <span className="ml-2 text-slate-500">• {m.role}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeMember(m.id)}
+                        className="text-xs text-rose-400 hover:text-rose-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="text"
+                      placeholder="Member Name"
+                      value={newMemberName}
+                      onChange={(e) => setNewMemberName(e.target.value)}
+                      className="flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-300/60"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Role (e.g. AI / Frontend)"
+                      value={newMemberRole}
+                      onChange={(e) => setNewMemberRole(e.target.value)}
+                      className="w-40 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-amber-300/60"
+                    />
+                    <button
+                      type="button"
+                      onClick={addMember}
+                      className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-300/20"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
+                  {reqSaveSuccess ? (
+                    <span className="text-xs text-emerald-400 font-semibold">
+                      ✓ Requirements saved successfully!
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-500">
+                      Remember to save before submitting proposal.
+                    </span>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={reqSaveLoading}
+                    className="rounded-lg bg-amber-300 px-5 py-2 text-xs font-bold text-black hover:bg-amber-200 transition disabled:opacity-50 shadow-[0_0_15px_rgba(251,191,36,0.3)]"
+                  >
+                    {reqSaveLoading ? "Saving…" : "Save Team Requirements"}
+                  </button>
+                </div>
+              </form>
+            </section>
+
+            {/* SECTION B: UPLOAD PDF */}
+            <section className="rounded-2xl border border-white/10 bg-[#0e0d1a]/90 p-6 backdrop-blur-xl shadow-xl space-y-4">
+              <div>
+                <h2 className="font-serif text-xl font-bold text-slate-100">
+                  Step 2: Upload Proposal PDF
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Upload your submission deck / proposal in PDF format (max 15 MB). Criteria F1–F6, F9, and F10 will be analyzed by AI; F7 &amp; F8 are evaluated live by judges.
+                </p>
+              </div>
+
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  const dropped = e.dataTransfer.files[0];
+                  if (dropped) onPick(dropped);
+                }}
+                onClick={() => inputRef.current?.click()}
+                className={`flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 cursor-pointer transition ${
+                  dragOver
+                    ? "border-amber-300 bg-amber-300/10"
+                    : file
+                    ? "border-emerald-400/50 bg-emerald-400/5"
+                    : "border-white/15 bg-white/[0.02] hover:border-amber-300/40 hover:bg-white/[0.04]"
+                }`}
+              >
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept="application/pdf"
+                  className="hidden"
+                  onChange={(e) => onPick(e.target.files?.[0] || null)}
+                />
+                <span className="text-3xl mb-2">{file ? "📄" : "📁"}</span>
+                {file ? (
+                  <div className="text-center">
+                    <span className="font-semibold text-emerald-300 text-sm">{file.name}</span>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {(file.size / (1024 * 1024)).toFixed(2)} MB • Click to change file
+                    </p>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <span className="text-sm font-semibold text-slate-200">
+                      Click to browse or drag and drop proposal PDF
+                    </span>
+                    <p className="text-xs text-slate-500 mt-1">Single PDF file up to 15 MB</p>
+                  </div>
+                )}
+              </div>
+
+              {uploadError && (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+                  {uploadError}
+                </div>
+              )}
+
+              {uploadDone && (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+                  ✓ {uploadDone.message}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleSubmitProposal}
+                  disabled={!file || uploadLoading}
+                  className="rounded-lg bg-gradient-to-r from-amber-400 to-amber-300 px-6 py-2.5 text-xs font-bold text-black hover:opacity-90 transition shadow-[0_0_20px_rgba(251,191,36,0.35)] disabled:opacity-40"
+                >
+                  {uploadLoading ? "Submitting & Evaluating…" : "Submit Proposal for Evaluation →"}
+                </button>
+              </div>
+            </section>
+
+            {/* SECTION C: SUBMISSION STATUS */}
+            {latestSub && (
+              <section className="rounded-2xl border border-white/10 bg-[#0e0d1a]/90 p-6 backdrop-blur-xl shadow-xl space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-slate-500">
+                      Latest Submission
+                    </span>
+                    <h3 className="font-serif text-xl font-bold text-slate-100">
+                      {latestSub.file_name}
+                    </h3>
+                    <span className="text-xs text-slate-400">
+                      Submitted on: {new Date(latestSub.created_at).toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        latestSub.status === "done"
+                          ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                          : latestSub.status === "evaluating"
+                          ? "bg-sky-500/15 text-sky-300 border border-sky-500/30 animate-pulse"
+                          : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                      }`}
+                    >
+                      {latestSub.status === "done"
+                        ? "Evaluated"
+                        : latestSub.status === "evaluating"
+                        ? "AI Evaluating…"
+                        : "Pending Evaluation"}
+                    </span>
+
+                    {latestSub.score != null && (
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-amber-300">
+                          {latestSub.score}
+                          <span className="text-sm text-slate-400">/100</span>
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400">
+                          {resultData?.overallRating || ""}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {criteriaList.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="font-serif text-base font-bold text-slate-200">
+                      Criteria Breakdown (AI &amp; Live Jury Hybrid)
+                    </h4>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {criteriaList.map((c: any) => {
+                        const isManual = c.type === "manual" || c.id === "F7" || c.id === "F8";
+
+                        return (
+                          <div
+                            key={c.id}
+                            className={`rounded-xl border p-3.5 space-y-2 ${
+                              isManual
+                                ? "border-amber-300/30 bg-amber-300/[0.03]"
+                                : "border-white/10 bg-white/[0.02]"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                                  {c.id}
+                                </span>
+                                <span className="text-xs font-semibold text-slate-200">{c.name}</span>
+                              </div>
+                              <span className="text-xs font-bold text-amber-300">
+                                {c.score}/{c.maxScore ?? 10}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase ${
+                                  isManual
+                                    ? "bg-amber-400/20 text-amber-200 border border-amber-400/30"
+                                    : "bg-cyan-400/20 text-cyan-200 border border-cyan-400/30"
+                                }`}
+                              >
+                                {isManual ? "✍️ Live Jury Evaluation" : "🤖 AI Evaluated"}
+                              </span>
+                              {isManual && !c.isManuallyGraded && (
+                                <span className="text-[10px] text-amber-300/70">
+                                  (Pending live presentation)
+                                </span>
+                              )}
+                            </div>
+
+                            {c.evidence && (
+                              <p className="text-[11px] text-slate-400 leading-relaxed">
+                                <b className="text-slate-300">Evidence:</b> {c.evidence}
+                              </p>
+                            )}
+                            {c.strengths && (
+                              <p className="text-[11px] text-emerald-300/90">
+                                <b className="text-emerald-200">Strengths:</b> {c.strengths}
+                              </p>
+                            )}
+                            {c.weaknesses && (
+                              <p className="text-[11px] text-rose-300/90">
+                                <b className="text-rose-200">Suggestions:</b> {c.weaknesses}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        )}
+
+        <Footer className="mt-16 border-t border-white/5 pt-6" />
       </main>
     </div>
   );

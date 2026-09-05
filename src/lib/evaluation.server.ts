@@ -6,24 +6,30 @@ import { createAiGatewayProvider } from "./ai-gateway.server";
 
 const CRITERIA_PATH = path.resolve(process.cwd(), "criteria-config.json");
 
-export function readCriteriaConfig(): { id: string; name: string; maxScore: number; description: string }[] {
+export function readCriteriaConfig(): { id: string; name: string; maxScore: number; description: string; type: "ai" | "manual"; evalMode?: "ai" | "manual" }[] {
   try {
     if (fs.existsSync(CRITERIA_PATH)) {
       const raw = JSON.parse(fs.readFileSync(CRITERIA_PATH, "utf-8"));
-      if (Array.isArray(raw?.criteria) && raw.criteria.length > 0) return raw.criteria;
+      if (Array.isArray(raw?.criteria) && raw.criteria.length > 0) {
+        return raw.criteria.map((c: any) => ({
+          ...c,
+          type: c.type || (c.id === "F7" || c.id === "F8" ? "manual" : "ai"),
+          evalMode: c.evalMode || c.type || (c.id === "F7" || c.id === "F8" ? "manual" : "ai"),
+        }));
+      }
     }
   } catch {}
   return [
-    { id: "F1",  name: "Innovation & Creativity",          maxScore: 10, description: "Originality, uniqueness, creativity." },
-    { id: "F2",  name: "Problem Understanding & Relevance", maxScore: 10, description: "Clarity of problem and theme alignment." },
-    { id: "F3",  name: "Feasibility & Practicality",        maxScore: 10, description: "Realistic implementation." },
-    { id: "F4",  name: "Impact & Usefulness",               maxScore: 10, description: "Social/environmental/economic impact." },
-    { id: "F5",  name: "User-Centric Approach",             maxScore: 10, description: "User needs, accessibility, inclusivity." },
-    { id: "F6",  name: "Scalability & Future Scope",        maxScore: 10, description: "Expand, sustain, evolve." },
-    { id: "F7",  name: "Sustainability & Ethics",           maxScore: 10, description: "Eco-friendly and ethical considerations." },
-    { id: "F8",  name: "Presentation & Communication",      maxScore: 10, description: "Pitch clarity, structure, confidence." },
-    { id: "F9",  name: "Teamwork & Collaboration",          maxScore: 10, description: "Coordination, participation, team dynamics." },
-    { id: "F10", name: "Business Viability",                maxScore: 10, description: "Market potential, affordability, applicability." },
+    { id: "F1",  name: "Innovation & Creativity",          maxScore: 10, description: "Novelty of idea & creative problem-solving", type: "ai", evalMode: "ai" },
+    { id: "F2",  name: "Technical Feasibility",             maxScore: 10, description: "Complexity, feasibility, and scalability", type: "ai", evalMode: "ai" },
+    { id: "F3",  name: "User Experience & Design",          maxScore: 10, description: "UI/UX, accessibility, and inclusivity", type: "ai", evalMode: "ai" },
+    { id: "F4",  name: "Impact & Usefulness",               maxScore: 10, description: "Problem-solution fit, potential impact, and multiple use cases", type: "ai", evalMode: "ai" },
+    { id: "F5",  name: "Technical Execution",               maxScore: 10, description: "Prototype, code quality, and technology stack", type: "ai", evalMode: "ai" },
+    { id: "F6",  name: "Sustainability & Future Scope",     maxScore: 10, description: "Long-term viability & eco-friendly practices", type: "ai", evalMode: "ai" },
+    { id: "F7",  name: "Presentation & Communication",      maxScore: 10, description: "Clarity, pitch effectiveness, and Q&A handling (Evaluated manually by jury)", type: "manual", evalMode: "manual" },
+    { id: "F8",  name: "Collaboration & Teamwork",          maxScore: 10, description: "Team dynamics & problem-solving approach (Evaluated manually by jury)", type: "manual", evalMode: "manual" },
+    { id: "F9",  name: "Business Viability (if applicable)", maxScore: 10, description: "Market potential, revenue model, and affordability", type: "ai", evalMode: "ai" },
+    { id: "F10", name: "Security & Privacy",                maxScore: 10, description: "Data protection & compliance with privacy regulations", type: "ai", evalMode: "ai" },
   ];
 }
 
@@ -35,6 +41,9 @@ const CriterionSchema = z.object({
   strengths: z.string(),
   weaknesses: z.string(),
   deductions: z.string(),
+  type: z.string().optional(),
+  evalMode: z.string().optional(),
+  isManuallyGraded: z.boolean().optional(),
 });
 
 export const ResultSchema = z.object({
@@ -55,21 +64,44 @@ export type EvaluationResult = z.infer<typeof ResultSchema>;
 function buildSystemPrompt(category?: string): string {
   const criteriaList = readCriteriaConfig();
   const maxTotal = criteriaList.reduce((s, c) => s + c.maxScore, 0);
+
+  const aiCriteria = criteriaList.filter((c) => c.type !== "manual" && c.id !== "F7" && c.id !== "F8");
+  const manualCriteria = criteriaList.filter((c) => c.type === "manual" || c.id === "F7" || c.id === "F8");
+
   const criteriaText = criteriaList
-    .map((c) => `${c.id}. ${c.name} (${c.maxScore}) — ${c.description}`)
+    .map((c) => {
+      const isManual = c.type === "manual" || c.id === "F7" || c.id === "F8";
+      return `${c.id}. ${c.name} (${c.maxScore} pts) [${isManual ? "MANUAL EVALUATION BY JURY" : "AI EVALUATION FROM PDF"}] — ${c.description}`;
+    })
     .join("\n");
+
   const count = criteriaList.length;
+
   return `You are the Official Evaluation Engine for Ideathon 2026.
 ${category ? `The team has selected the following topic/category: "${category}". Please evaluate their submission within the context of this category.` : ""}
-Read the entire submission PDF. Score strictly using evidence from the document. Never score based on keywords or buzzwords. Every awarded mark must be supported by evidence; every deduction must be explained.
 
-Bands per criterion (0-maxScore): 9-10 outstanding, 7-8 strong, 5-6 average, 3-4 weak, 0-2 missing (scale proportionally for non-10 maxScores).
-Overall: Excellent 85-100; Strong 70-84; Promising with gaps 61-69; Major gaps 41-60; Weak/incomplete 0-40.
+IMPORTANT EVALUATION PROTOCOL (AI vs MANUAL CRITERIA):
+1. [AI EVALUATION FROM PDF]: (${aiCriteria.map((c) => c.id).join(", ")})
+   Read the entire submission PDF. Score strictly using concrete evidence, quotes, or paraphrased details from the document.
+   Bands per criterion (0-maxScore): 9-10 outstanding, 7-8 strong, 5-6 average, 3-4 weak, 0-2 missing.
+   Never score based on buzzwords. Every awarded mark must cite evidence; every deduction must be justified.
 
-Criteria (${count} total, max total = ${maxTotal}):
+2. [MANUAL EVALUATION BY JURY]: (${manualCriteria.map((c) => `${c.id} - ${c.name}`).join(", ")})
+   These criteria represent in-person presentation, live pitch delivery, Q&A defense, and team dynamics.
+   They CANNOT and MUST NOT be graded from the uploaded PDF proposal. They will be scored MANUALLY in person by human judges during the live pitch.
+   For these manual criteria:
+   - score: MUST be exactly 0 (they will be filled in manually by the judging panel).
+   - evidence: MUST state "Pending manual evaluation: To be evaluated by judges during live presentation & Q&A."
+   - strengths: MUST state "To be evaluated during live pitch."
+   - weaknesses: MUST state "To be evaluated during live pitch."
+   - deductions: MUST state "None (Evaluated manually)"
+
+Criteria List (${count} total, max potential total = ${maxTotal}):
 ${criteriaText}
 
-Return all ${count} criteria in order. totalScore = sum of criterion scores (0-${maxTotal}).
+Return all ${count} criteria in order.
+totalScore = sum of criterion scores (which will be the sum of the AI-evaluated criteria, max 80 for standard 10-point rubric).
+Overall rating scale: Excellent 85-100; Strong 70-84; Promising with gaps 61-69; Major gaps 41-60; Weak/incomplete 0-40.
 
 Respond with ONLY a single JSON object (no markdown, no prose, no code fences) matching this TypeScript type:
 {
@@ -102,6 +134,26 @@ function extractJson(text: string): unknown {
   }
 }
 
+function standardizeResult(result: EvaluationResult): EvaluationResult {
+  const criteriaConfig = readCriteriaConfig();
+  const configMap = new Map(criteriaConfig.map((c) => [c.id, c]));
+
+  result.criteria = result.criteria.map((c) => {
+    const cfg = configMap.get(c.id);
+    const isManual = cfg?.type === "manual" || c.id === "F7" || c.id === "F8";
+    return {
+      ...c,
+      score: isManual ? (c.isManuallyGraded ? c.score : 0) : c.score,
+      type: isManual ? "manual" : "ai",
+      evalMode: isManual ? "manual" : "ai",
+      isManuallyGraded: Boolean(c.isManuallyGraded),
+    };
+  });
+
+  result.totalScore = result.criteria.reduce((sum, c) => sum + (c.score || 0), 0);
+  return result;
+}
+
 export async function evaluatePdf(base64Pdf: string, fileName: string, category?: string): Promise<EvaluationResult> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("Missing OPENAI_API_KEY environment variable");
@@ -110,81 +162,80 @@ export async function evaluatePdf(base64Pdf: string, fileName: string, category?
   const isDirectGemini = gatewayUrl.includes("googleapis.com");
 
   const SYSTEM = buildSystemPrompt(category);
+  const modelsToTry = isDirectGemini
+    ? [process.env.AI_MODEL || "gemini-3.7-flash", "gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-pro"]
+    : [process.env.AI_MODEL || "google/gemini-3-pro-preview"];
 
-  const runOnce = async (): Promise<EvaluationResult> => {
-    if (isDirectGemini) {
-      const model = process.env.AI_MODEL || "gemini-1.5-pro";
-      // Google API expects the key as a query parameter
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `${SYSTEM}\n\nEvaluate the attached submission PDF (${fileName}) per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
-                  },
-                  {
-                    inlineData: {
-                      mimeType: "application/pdf",
-                      data: base64Pdf,
-                    },
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0,
-              responseMimeType: "application/json",
-            },
-          }),
-        }
-      );
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Gemini API error (${res.status}): ${errText}`);
-      }
-
-      const responseData = await res.json();
-      const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error("Empty response from Gemini API");
-      return ResultSchema.parse(extractJson(text));
-    } else {
-      const gateway = createAiGatewayProvider(key);
-      const { text } = await generateText({
-        model: gateway(process.env.AI_MODEL || "google/gemini-3-pro-preview"),
-        temperature: 0,
-        system: SYSTEM,
-        messages: [
+  let lastError: any;
+  for (const model of modelsToTry) {
+    try {
+      if (isDirectGemini) {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
           {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Evaluate the attached submission PDF (${fileName}) per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      text: `${SYSTEM}\n\nEvaluate the attached submission PDF (${fileName}) per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
+                    },
+                    {
+                      inlineData: {
+                        mimeType: "application/pdf",
+                        data: base64Pdf,
+                      },
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0,
+                responseMimeType: "application/json",
               },
-              { type: "file", mediaType: "application/pdf", data: base64Pdf },
-            ],
-          },
-        ],
-      });
-      return ResultSchema.parse(extractJson(text));
-    }
-  };
+            }),
+          }
+        );
 
-  // retry once on parse error
-  try {
-    const result = await runOnce();
-    result.totalScore = result.criteria.reduce((sum, c) => sum + (c.score || 0), 0);
-    return result;
-  } catch (e) {
-    console.error("[evaluatePdf] attempt 1 failed:", e);
-    const result = await runOnce();
-    result.totalScore = result.criteria.reduce((sum, c) => sum + (c.score || 0), 0);
-    return result;
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Gemini API error (${res.status}): ${errText}`);
+        }
+
+        const responseData = await res.json();
+        const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error("Empty response from Gemini API");
+        const result = ResultSchema.parse(extractJson(text));
+        return standardizeResult(result);
+      } else {
+        const gateway = createAiGatewayProvider(key);
+        const { text } = await generateText({
+          model: gateway(model),
+          temperature: 0,
+          system: SYSTEM,
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `Evaluate the attached submission PDF (${fileName}) per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
+                },
+                { type: "file", mediaType: "application/pdf", data: base64Pdf },
+              ],
+            },
+          ],
+        });
+        const result = ResultSchema.parse(extractJson(text));
+        return standardizeResult(result);
+      }
+    } catch (e: any) {
+      console.error(`[evaluatePdf] model ${model} failed:`, e?.message || e);
+      lastError = e;
+    }
   }
+
+  throw lastError || new Error("Failed to evaluate PDF with all available AI models.");
 }

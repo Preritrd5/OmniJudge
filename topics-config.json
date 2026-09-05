@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-04T11:53:54.347Z",
+  "topics": [
+    {
+      "id": "T1",
+      "name": "AI & Machine Learning"
+    },
+    {
+      "id": "T2",
+      "name": "FinTech & Web3"
+    },
+    {
+      "id": "T3",
+      "name": "EdTech & Learning"
+    },
+    {
+      "id": "T4",
+      "name": "Healthcare & MedTech"
+    },
+    {
+      "id": "T5",
+      "name": "Sustainability & GreenTech"
+    }
+  ]
+}

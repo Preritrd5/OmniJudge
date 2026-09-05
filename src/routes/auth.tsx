@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import Footer from "@/components/Footer";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -23,7 +24,9 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/admin" });
+      if (data.user?.email === "admin@admin.com") {
+        navigate({ to: "/admin" });
+      }
     });
   }, [navigate]);
 
@@ -46,8 +49,8 @@ function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a14] text-slate-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-[#0a0a14] text-slate-100 flex flex-col items-center justify-between px-4 py-8">
+      <div className="w-full max-w-md my-auto">
         <div className="flex items-center justify-between">
           <Link to="/" className="text-xs uppercase tracking-[0.3em] text-amber-300/80 hover:text-amber-200">
             ← Ideathon 2026
@@ -94,14 +97,39 @@ function AuthPage() {
 
           <button
             disabled={loading}
-            className="w-full rounded-lg bg-amber-300 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-200 disabled:opacity-60"
+            className="w-full rounded-lg bg-amber-300 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-200 disabled:opacity-60 cursor-pointer"
           >
             {loading ? "Please wait…" : "Sign in"}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-slate-500">Admin access only.</p>
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-slate-300">
+          <div>
+            <span className="font-semibold text-amber-300">Default Admin Account:</span>
+            <p className="font-mono text-[11px] text-slate-400">admin@admin.com</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEmail("admin@admin.com");
+              setPassword("Ideathon!2026#Judge");
+            }}
+            className="rounded-lg border border-amber-300/30 bg-amber-300/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 hover:bg-amber-300/20 transition cursor-pointer"
+          >
+            Autofill Credentials
+          </button>
+        </div>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          Admin access only. Team Leaders can access their dashboard on the{" "}
+          <Link to="/team" className="text-amber-300 underline hover:text-amber-200">
+            Team Portal
+          </Link>
+          .
+        </p>
       </div>
+
+      <Footer className="mt-8 border-t-0 pt-0 pb-0" showLogo={false} />
     </div>
   );
 }

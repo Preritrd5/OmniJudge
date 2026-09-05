@@ -1,66 +1,86 @@
 {
-  "version": 1,
-  "updatedAt": "2026-07-01T00:00:00.000Z",
+  "version": 2,
+  "updatedAt": "2026-09-05T10:35:00.000Z",
   "criteria": [
     {
       "id": "F1",
       "name": "Innovation & Creativity",
       "maxScore": 10,
-      "description": "Originality, uniqueness, and creative thinking behind the idea."
+      "description": "Novelty of idea & creative problem-solving",
+      "type": "ai",
+      "evalMode": "ai"
     },
     {
       "id": "F2",
-      "name": "Problem Understanding & Relevance",
+      "name": "Technical Feasibility",
       "maxScore": 10,
-      "description": "Clarity of problem definition and alignment to the ideathon theme."
+      "description": "Complexity, feasibility, and scalability",
+      "type": "ai",
+      "evalMode": "ai"
     },
     {
       "id": "F3",
-      "name": "Feasibility & Practicality",
+      "name": "User Experience & Design",
       "maxScore": 10,
-      "description": "Realistic implementation plan within available resources and timeframe."
+      "description": "UI/UX, accessibility, and inclusivity",
+      "type": "ai",
+      "evalMode": "ai"
     },
     {
       "id": "F4",
       "name": "Impact & Usefulness",
       "maxScore": 10,
-      "description": "Social, environmental, or economic impact potential of the solution."
+      "description": "Problem-solution fit, potential impact, and multiple use cases",
+      "type": "ai",
+      "evalMode": "ai"
     },
     {
       "id": "F5",
-      "name": "User-Centric Approach",
+      "name": "Technical Execution",
       "maxScore": 10,
-      "description": "Focus on user needs, accessibility, and inclusivity of the solution."
+      "description": "Prototype, code quality, and technology stack",
+      "type": "ai",
+      "evalMode": "ai"
     },
     {
       "id": "F6",
-      "name": "Scalability & Future Scope",
+      "name": "Sustainability & Future Scope",
       "maxScore": 10,
-      "description": "Ability to expand, sustain, and evolve the solution over time."
+      "description": "Long-term viability & eco-friendly practices",
+      "type": "ai",
+      "evalMode": "ai"
     },
     {
       "id": "F7",
-      "name": "Sustainability & Ethics",
+      "name": "Presentation & Communication",
       "maxScore": 10,
-      "description": "Eco-friendly practices and ethical considerations in the solution design."
+      "description": "Clarity, pitch effectiveness, and Q&A handling (Evaluated manually by jury during live presentation)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F8",
-      "name": "Presentation & Communication",
+      "name": "Collaboration & Teamwork",
       "maxScore": 10,
-      "description": "Pitch clarity, structure, visual design, and confidence of delivery."
+      "description": "Team dynamics & problem-solving approach (Evaluated manually by jury during live presentation)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F9",
-      "name": "Teamwork & Collaboration",
+      "name": "Business Viability (if applicable)",
       "maxScore": 10,
-      "description": "Coordination, participation, and team dynamics demonstrated."
+      "description": "Market potential, revenue model, and affordability",
+      "type": "ai",
+      "evalMode": "ai"
     },
     {
       "id": "F10",
-      "name": "Business Viability",
+      "name": "Security & Privacy",
       "maxScore": 10,
-      "description": "Market potential, affordability, and real-world applicability of the idea."
+      "description": "Data protection & compliance with privacy regulations",
+      "type": "ai",
+      "evalMode": "ai"
     }
   ]
 }
