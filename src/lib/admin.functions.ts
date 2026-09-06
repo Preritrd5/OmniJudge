@@ -374,17 +374,30 @@ export const deleteSubmission = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Fetch storage path before deleting row
     const { data: sub } = await supabaseAdmin
       .from("submissions")
       .select("pdf_path")
       .eq("id", data.id)
       .maybeSingle();
+
     if (sub?.pdf_path) {
-      await supabaseAdmin.storage.from("submissions").remove([sub.pdf_path]);
+      try {
+        await supabaseAdmin.storage.from("submissions").remove([sub.pdf_path]);
+      } catch (storageErr) {
+        console.warn("[deleteSubmission] Storage removal note:", storageErr);
+      }
     }
+
+    // Permanently delete submission from database
     const { error } = await supabaseAdmin.from("submissions").delete().eq("id", data.id);
-    if (error) throw error;
-    return { ok: true };
+    if (error) {
+      console.error("[deleteSubmission] Database delete error:", error);
+      throw new Error(`Failed to delete submission: ${error.message}`);
+    }
+
+    return { ok: true, deletedId: data.id };
   });
 
 export const renameTeam = createServerFn({ method: "POST" })
@@ -415,7 +428,7 @@ export const saveManualScores = createServerFn({ method: "POST" })
       scores: z.record(
         z.string(),
         z.object({
-          score: z.number().min(0).max(100),
+          score: z.number().min(0).max(10), // Each manual criterion (F7, F8) is max 10
           evidence: z.string().optional(),
           strengths: z.string().optional(),
           weaknesses: z.string().optional(),
@@ -427,9 +440,11 @@ export const saveManualScores = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { emitNotification } = await import("@/lib/notifications.server");
+
     const { data: sub, error } = await supabaseAdmin
       .from("submissions")
-      .select("id, score, result")
+      .select("id, team_id, file_name, score, result")
       .eq("id", data.submissionId)
       .single();
 
@@ -437,38 +452,165 @@ export const saveManualScores = createServerFn({ method: "POST" })
 
     const r: any = sub.result || {};
     const criteria: any[] = Array.isArray(r.criteria) ? [...r.criteria] : [];
-    let newTotal = 0;
 
+    // 1. Separate AI Marks (F1-F6, F9, F10: max 80)
+    const aiCriteria = criteria.filter(
+      (c: any) => c.id !== "F7" && c.id !== "F8" && c.type !== "manual" && c.evalMode !== "manual"
+    );
+    const aiScore = r.ai_evaluation?.score != null
+      ? Number(r.ai_evaluation.score)
+      : aiCriteria.reduce((sum: number, c: any) => sum + (Number(c.score) || 0), 0);
+
+    // 2. Separate Teacher Marks (F7 & F8: max 10 each, subtotal max 20)
+    let f7Score = r.teacher_evaluation?.f7?.score ?? 0;
+    let f7Remarks = r.teacher_evaluation?.f7?.remarks || "";
+    let f8Score = r.teacher_evaluation?.f8?.score ?? 0;
+    let f8Remarks = r.teacher_evaluation?.f8?.remarks || "";
+
+    if (data.scores["F7"]) {
+      f7Score = Math.max(0, Math.min(10, Number(data.scores["F7"].score) || 0));
+      f7Remarks = data.scores["F7"].evidence || data.scores["F7"].weaknesses || "";
+    }
+    if (data.scores["F8"]) {
+      f8Score = Math.max(0, Math.min(10, Number(data.scores["F8"].score) || 0));
+      f8Remarks = data.scores["F8"].evidence || data.scores["F8"].weaknesses || "";
+    }
+
+    // Update criteria array for backward compatibility
     for (const c of criteria) {
       if (data.scores[c.id]) {
         const update = data.scores[c.id];
-        c.score = update.score;
+        c.score = Math.max(0, Math.min(c.maxScore ?? 10, update.score));
         if (update.evidence !== undefined) c.evidence = update.evidence;
         if (update.strengths !== undefined) c.strengths = update.strengths;
         if (update.weaknesses !== undefined) c.weaknesses = update.weaknesses;
         if (update.deductions !== undefined) c.deductions = update.deductions;
         c.isManuallyGraded = true;
       }
-      newTotal += Number(c.score) || 0;
     }
 
+    const teacherScore = Math.min(20, Math.max(0, f7Score + f8Score));
+
+    // 3. Authoritative Combined Calculation: Final Score = AI Marks (80) + Teacher Marks (20) = 100 max
+    const combinedScore = Math.min(100, Math.max(0, aiScore + teacherScore));
+
     let rating = "Weak/incomplete";
-    if (newTotal >= 85) rating = "Excellent";
-    else if (newTotal >= 70) rating = "Strong";
-    else if (newTotal >= 61) rating = "Promising with gaps";
-    else if (newTotal >= 41) rating = "Major gaps";
+    if (combinedScore >= 85) rating = "Excellent";
+    else if (combinedScore >= 70) rating = "Strong";
+    else if (combinedScore >= 61) rating = "Promising with gaps";
+    else if (combinedScore >= 41) rating = "Major gaps";
+
+    // Structured storage
+    r.ai_evaluation = {
+      score: aiScore,
+      maxScore: 80,
+      status: r.ai_evaluation?.status || "completed",
+      timestamp: r.ai_evaluation?.timestamp || new Date().toISOString(),
+      criteria: aiCriteria.map((c) => ({
+        id: c.id,
+        name: c.name,
+        score: c.score,
+        maxScore: c.maxScore ?? 10,
+        evidence: c.evidence,
+        strengths: c.strengths,
+        weaknesses: c.weaknesses,
+      })),
+    };
+
+    r.teacher_evaluation = {
+      score: teacherScore,
+      maxScore: 20,
+      status: "completed",
+      evaluator: context.userId || "Admin / Jury Panel",
+      timestamp: new Date().toISOString(),
+      f7: {
+        score: f7Score,
+        maxScore: 10,
+        name: "Presentation & Communication",
+        remarks: f7Remarks,
+      },
+      f8: {
+        score: f8Score,
+        maxScore: 10,
+        name: "Collaboration & Teamwork",
+        remarks: f8Remarks,
+      },
+      criteria: [
+        { id: "F7", name: "Presentation & Communication", score: f7Score, maxScore: 10, remarks: f7Remarks },
+        { id: "F8", name: "Collaboration & Teamwork", score: f8Score, maxScore: 10, remarks: f8Remarks },
+      ],
+    };
+
+    r.combined_calculation = {
+      score: combinedScore,
+      maxScore: 100,
+      ai_component: aiScore,
+      teacher_component: teacherScore,
+      formula: "AI Marks (80) + Teacher Marks (20) = Final Combined Score (100)",
+      status: "completed",
+      timestamp: new Date().toISOString(),
+      overallRating: rating,
+    };
 
     r.criteria = criteria;
-    r.totalScore = newTotal;
+    r.totalScore = combinedScore;
     r.overallRating = rating;
 
     const { error: upErr } = await supabaseAdmin
       .from("submissions")
-      .update({ score: newTotal, result: r })
+      .update({ score: combinedScore, result: r })
       .eq("id", data.submissionId);
 
     if (upErr) throw new Error(`Failed to update scores: ${upErr.message}`);
-    return { ok: true, totalScore: newTotal, overallRating: rating, criteria };
+
+    // Emit event notifications to team (messages are sanitized of numbers)
+    try {
+      if (sub.team_id) {
+        emitNotification({
+          teamId: sub.team_id,
+          type: "TEACHER_EVALUATION_UPDATED",
+          title: "Teacher Evaluation Recorded",
+          message: `Manual jury evaluation updated for submission "${sub.file_name}".`,
+        });
+
+        if (data.scores["F7"]) {
+          emitNotification({
+            teamId: sub.team_id,
+            type: "F7_UPDATED",
+            title: "Presentation Assessment Recorded",
+            message: `Presentation & Communication rubric verified by live judging panel.`,
+          });
+        }
+
+        if (data.scores["F8"]) {
+          emitNotification({
+            teamId: sub.team_id,
+            type: "F8_UPDATED",
+            title: "Teamwork Assessment Recorded",
+            message: `Collaboration & Teamwork rubric verified by live judging panel.`,
+          });
+        }
+
+        emitNotification({
+          teamId: sub.team_id,
+          type: "COMBINED_RESULT_UPDATED",
+          title: "Evaluation Finalized",
+          message: `Hybrid evaluation successfully consolidated for "${sub.file_name}".`,
+        });
+      }
+    } catch (notifErr) {
+      console.warn("[saveManualScores] Failed to emit notifications:", notifErr);
+    }
+
+    return {
+      ok: true,
+      totalScore: combinedScore,
+      aiScore,
+      teacherScore,
+      overallRating: rating,
+      result: r,
+      criteria,
+    };
   });
 
 // ─── Team Leader Registration & Portal Functions ─────────────────────────────
@@ -638,10 +780,60 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
       .eq("team_id", teamRecord.id)
       .order("created_at", { ascending: false });
 
+    // CRITICAL: Strip all scores, marks, criteria points, and numeric ratings
+    // Students only receive status pipeline and sanitized qualitative remarks.
+    const sanitizeText = (text?: string): string => {
+      if (!text) return "";
+      return text
+        .replace(/\b\d+(\.\d+)?\s*(?:\/|\s*out of\s*)\s*\d+(\.\d+)?\b/gi, "[Evaluated]")
+        .replace(/\b\d+(\.\d+)?(?:\s+\w+){0,2}\s*(?:points|pts|marks|percent|%)\b/gi, "[Evaluated]")
+        .replace(/\b(?:score|scored|marks|marked|grade|graded|rating|rated):\s*\d+(\.\d+)?\b/gi, "Status: Evaluated")
+        .replace(/\b(?:F[1-9]|F10)\s*(?:score|marks|rating)?\s*[:=-]?\s*\d+(\.\d+)?\b/gi, "[Assessed]")
+        .trim();
+    };
+
+    const safeSubmissions = (subs || []).map((s) => {
+      const r = (s.result as any) || {};
+
+      let stage: "uploaded" | "submitted" | "processing" | "evaluating" | "completed" | "failed" = "uploaded";
+      let displayStatus = "Uploaded";
+
+      if (s.status === "failed") {
+        stage = "failed";
+        displayStatus = "Failed";
+      } else if (s.status === "done") {
+        stage = "completed";
+        displayStatus = "Evaluation Completed";
+      } else if (s.status === "evaluating") {
+        stage = "evaluating";
+        displayStatus = "Evaluating Submission";
+      } else if (s.status === "processing") {
+        stage = "processing";
+        displayStatus = "Processing Document";
+      } else if (s.status === "pending") {
+        stage = "submitted";
+        displayStatus = "Submitted & Queued";
+      }
+
+      return {
+        id: s.id,
+        fileName: s.file_name,
+        category: s.category || null,
+        createdAt: s.created_at,
+        status: s.status,
+        displayStatus,
+        stage,
+        error: s.error || null,
+      };
+    });
+
     return {
       found: true,
       team: {
-        ...teamRecord,
+        id: teamRecord.id,
+        name: teamRecord.name,
+        created_at: teamRecord.created_at,
+        leader_email: teamRecord.leader_email,
         profile: profile || {
           teamId: teamRecord.id,
           teamName: teamRecord.name,
@@ -649,7 +841,98 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
           leaderEmail: teamRecord.leader_email || data.email,
           createdAt: teamRecord.created_at,
         },
-        submissions: subs || [],
+        submissions: safeSubmissions,
       },
     };
+  });
+
+// ─── Score-Safe Notifications Functions ──────────────────────────────────────
+
+export const getStudentNotifications = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ teamId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { getNotificationsForTeam } = await import("@/lib/notifications.server");
+    return { notifications: getNotificationsForTeam(data.teamId) };
+  });
+
+export const markNotificationRead = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ id: z.string() }).parse(d))
+  .handler(async ({ data }) => {
+    const { markNotificationAsRead } = await import("@/lib/notifications.server");
+    const updated = markNotificationAsRead(data.id);
+    return { ok: true, notification: updated };
+  });
+
+export const markAllNotificationsRead = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ teamId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => {
+    const { markAllNotificationsAsRead } = await import("@/lib/notifications.server");
+    const count = markAllNotificationsAsRead(data.teamId);
+    return { ok: true, count };
+  });
+
+// ─── Announcements Functions ──────────────────────────────────────────────────
+
+export const getStudentAnnouncements = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { getPublishedAnnouncements } = await import("@/lib/announcements.server");
+    return { announcements: getPublishedAnnouncements() };
+  });
+
+export const getAdminAnnouncements = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
+    const { getAllAnnouncements } = await import("@/lib/announcements.server");
+    return { announcements: getAllAnnouncements() };
+  });
+
+export const createAnnouncementFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      title: z.string().trim().min(2).max(150),
+      content: z.string().trim().min(2).max(5000),
+      targetTeams: z.array(z.string()).optional(),
+      priority: z.enum(["low", "normal", "urgent"]).optional(),
+      pinned: z.boolean().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { createAnnouncement } = await import("@/lib/announcements.server");
+    const created = createAnnouncement({
+      title: data.title,
+      content: data.content,
+      author: "Ideathon Committee",
+      targetTeams: data.targetTeams,
+      priority: data.priority,
+      pinned: data.pinned,
+    });
+    return { ok: true, announcement: created };
+  });
+
+export const togglePublishAnnouncementFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      id: z.string(),
+      published: z.boolean(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { togglePublishAnnouncement } = await import("@/lib/announcements.server");
+    const updated = togglePublishAnnouncement(data.id, data.published);
+    return { ok: true, announcement: updated };
+  });
+
+export const deleteAnnouncementFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ id: z.string() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { deleteAnnouncement } = await import("@/lib/announcements.server");
+    const ok = deleteAnnouncement(data.id);
+    return { ok };
   });

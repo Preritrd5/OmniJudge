@@ -2,6 +2,7 @@ import { generateText } from "ai";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
+import * as https from "https";
 import { createAiGatewayProvider } from "./ai-gateway.server";
 
 const CRITERIA_PATH = path.resolve(process.cwd(), "criteria-config.json");
@@ -154,6 +155,48 @@ function standardizeResult(result: EvaluationResult): EvaluationResult {
   return result;
 }
 
+function httpsJsonPost(
+  urlString: string,
+  bodyObj: unknown,
+  timeoutMs = 60000
+): Promise<{ ok: boolean; status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(urlString);
+    const bodyStr = JSON.stringify(bodyObj);
+    const req = https.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || 443,
+        path: `${parsed.pathname}${parsed.search}`,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(bodyStr),
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () =>
+          resolve({
+            ok: (res.statusCode ?? 500) >= 200 && (res.statusCode ?? 500) < 300,
+            status: res.statusCode ?? 500,
+            text: data,
+          })
+        );
+      }
+    );
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error(`HTTPS request timed out after ${timeoutMs}ms`));
+    });
+    req.on("error", (err) => reject(err));
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
 export async function evaluatePdf(base64Pdf: string, fileName: string, category?: string): Promise<EvaluationResult> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("Missing OPENAI_API_KEY environment variable");
@@ -163,48 +206,43 @@ export async function evaluatePdf(base64Pdf: string, fileName: string, category?
 
   const SYSTEM = buildSystemPrompt(category);
   const modelsToTry = isDirectGemini
-    ? [process.env.AI_MODEL || "gemini-3.7-flash", "gemini-3.6-flash", "gemini-flash-latest", "gemini-2.5-pro"]
+    ? [process.env.AI_MODEL || "gemini-3.6-flash", "gemini-3.7-flash", "gemini-flash-latest"]
     : [process.env.AI_MODEL || "google/gemini-3-pro-preview"];
 
   let lastError: any;
   for (const model of modelsToTry) {
     try {
       if (isDirectGemini) {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+        const body = {
+          contents: [
+            {
+              parts: [
                 {
-                  parts: [
-                    {
-                      text: `${SYSTEM}\n\nEvaluate the attached submission PDF (${fileName}) per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
-                    },
-                    {
-                      inlineData: {
-                        mimeType: "application/pdf",
-                        data: base64Pdf,
-                      },
-                    },
-                  ],
+                  text: `${SYSTEM}\n\nEvaluate the attached submission PDF (${fileName}) per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
+                },
+                {
+                  inlineData: {
+                    mimeType: "application/pdf",
+                    data: base64Pdf,
+                  },
                 },
               ],
-              generationConfig: {
-                temperature: 0,
-                responseMimeType: "application/json",
-              },
-            }),
-          }
-        );
+            },
+          ],
+          generationConfig: {
+            temperature: 0,
+            responseMimeType: "application/json",
+          },
+        };
+
+        const res = await httpsJsonPost(url, body, 60000);
 
         if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Gemini API error (${res.status}): ${errText}`);
+          throw new Error(`Gemini API error (${res.status}): ${res.text}`);
         }
 
-        const responseData = await res.json();
+        const responseData = JSON.parse(res.text);
         const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error("Empty response from Gemini API");
         const result = ResultSchema.parse(extractJson(text));

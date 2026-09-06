@@ -74,6 +74,8 @@ export const Route = createFileRoute("/api/public/submit")({
             console.warn("[submit] Failed to update profile store:", profileErr);
           }
 
+          const { emitNotification } = await import("@/lib/notifications.server");
+
           // Upload PDF
           const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(0, 120);
           const path = `${teamId}/${Date.now()}-${safeName}`;
@@ -83,6 +85,16 @@ export const Route = createFileRoute("/api/public/submit")({
             .upload(path, buf, { contentType: "application/pdf", upsert: false });
           if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
 
+          // Emit upload success notification
+          try {
+            emitNotification({
+              teamId,
+              type: "PDF_UPLOAD_SUCCESS",
+              title: "Proposal PDF Uploaded",
+              message: `Proposal deck "${file.name}" uploaded successfully and verified.`,
+            });
+          } catch {}
+
           // Create submission row
           const { data: sub, error: subErr } = await supabaseAdmin
             .from("submissions")
@@ -90,6 +102,16 @@ export const Route = createFileRoute("/api/public/submit")({
             .select("id")
             .single();
           if (subErr) throw subErr;
+
+          // Emit submission received notification
+          try {
+            emitNotification({
+              teamId,
+              type: "SUBMISSION_RECEIVED",
+              title: "Submission Received",
+              message: `Proposal received for team "${teamName}". Queued for evaluation.`,
+            });
+          } catch {}
 
           // Evaluate in the background asynchronously
           const base64 = Buffer.from(buf).toString("base64");
@@ -102,13 +124,93 @@ export const Route = createFileRoute("/api/public/submit")({
                 .update({ status: "evaluating" })
                 .eq("id", sub.id);
 
+              try {
+                emitNotification({
+                  teamId,
+                  type: "EVALUATION_STARTED",
+                  title: "Evaluation In Progress",
+                  message: `Automated assessment started for "${file.name}".`,
+                });
+              } catch {}
+
               const { evaluatePdf } = await import("@/lib/evaluation.server");
-              const result = await evaluatePdf(base64, file.name, category);
+              const rawResult = await evaluatePdf(base64, file.name, category);
               
+              // Fetch latest submission row to preserve any existing teacher marks
+              const { data: latestSubRow } = await supabaseAdmin
+                .from("submissions")
+                .select("result")
+                .eq("id", sub.id)
+                .maybeSingle();
+
+              const existingResult: any = latestSubRow?.result || {};
+              const existingTeacherEval = existingResult.teacher_evaluation || null;
+
+              // Separate AI evaluation (criteria other than F7 & F8)
+              const aiCriteria = (rawResult.criteria || []).filter(
+                (c: any) => c.id !== "F7" && c.id !== "F8" && c.type !== "manual" && c.evalMode !== "manual"
+              );
+              const aiScore = aiCriteria.reduce((sum: number, c: any) => sum + (Number(c.score) || 0), 0);
+
+              // Separate Teacher evaluation (preserve existing or initialize clean)
+              const f7Score = existingTeacherEval?.f7?.score ?? 0;
+              const f8Score = existingTeacherEval?.f8?.score ?? 0;
+              const teacherScore = existingTeacherEval?.score ?? (f7Score + f8Score);
+
+              // Single authoritative formula: Final Score = AI Marks (80 max) + Teacher Marks (20 max)
+              const combinedScore = Math.min(100, Math.max(0, aiScore + teacherScore));
+
+              let rating = "Weak/incomplete";
+              if (combinedScore >= 85) rating = "Excellent";
+              else if (combinedScore >= 70) rating = "Strong";
+              else if (combinedScore >= 61) rating = "Promising with gaps";
+              else if (combinedScore >= 41) rating = "Major gaps";
+
+              const enrichedResult: any = {
+                ...rawResult,
+                ai_evaluation: {
+                  score: aiScore,
+                  maxScore: 80,
+                  status: "completed",
+                  timestamp: new Date().toISOString(),
+                  criteria: aiCriteria,
+                },
+                teacher_evaluation: existingTeacherEval || {
+                  score: 0,
+                  maxScore: 20,
+                  status: "pending",
+                  evaluator: null,
+                  timestamp: null,
+                  f7: { score: 0, maxScore: 10, name: "Presentation & Communication", remarks: "" },
+                  f8: { score: 0, maxScore: 10, name: "Collaboration & Teamwork", remarks: "" },
+                },
+                combined_calculation: {
+                  score: combinedScore,
+                  maxScore: 100,
+                  ai_component: aiScore,
+                  teacher_component: teacherScore,
+                  formula: "AI Marks (80) + Teacher Marks (20) = Final Combined Score (100)",
+                  status: existingTeacherEval ? "completed" : "pending_teacher",
+                  timestamp: new Date().toISOString(),
+                  overallRating: rating,
+                },
+                totalScore: combinedScore,
+                overallRating: rating,
+              };
+
               await supabaseAdmin
                 .from("submissions")
-                .update({ status: "done", score: result.totalScore, result })
+                .update({ status: "done", score: combinedScore, result: enrichedResult })
                 .eq("id", sub.id);
+
+              try {
+                emitNotification({
+                  teamId,
+                  type: "AI_EVALUATION_COMPLETED",
+                  title: "AI Evaluation Finished",
+                  message: `AI criteria assessment completed for "${file.name}".`,
+                });
+              } catch {}
             } catch (evalErr: any) {
               const msg = evalErr?.message || "Evaluation failed";
               console.error("[background-eval]", evalErr);

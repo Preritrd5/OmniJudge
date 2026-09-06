@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import ChromeScene from "@/components/ChromeScene";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -19,6 +19,10 @@ import {
   saveTopics,
   buildFeedbackEmail,
   saveManualScores,
+  getAdminAnnouncements,
+  createAnnouncementFn,
+  togglePublishAnnouncementFn,
+  deleteAnnouncementFn,
 } from "@/lib/admin.functions";
 import {
   generateTeamReport1Page,
@@ -105,6 +109,8 @@ function downloadCSV(filename: string, teams: TeamRow[]) {
 
 function AdminDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [deletingSubId, setDeletingSubId] = useState<string | null>(null);
   const listFn = useServerFn(listTeams);
   const delTeamFn = useServerFn(deleteTeam);
   const delSubFn = useServerFn(deleteSubmission);
@@ -116,6 +122,10 @@ function AdminDashboard() {
   const saveTopicsFn = useServerFn(saveTopics);
   const buildFeedbackFn = useServerFn(buildFeedbackEmail);
   const saveManualScoresFn = useServerFn(saveManualScores);
+  const getAnnouncementsFn = useServerFn(getAdminAnnouncements);
+  const createAnnFn = useServerFn(createAnnouncementFn);
+  const togglePublishFn = useServerFn(togglePublishAnnouncementFn);
+  const deleteAnnFn = useServerFn(deleteAnnouncementFn);
 
   // ── Queries ──
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -146,6 +156,18 @@ function AdminDashboard() {
     queryKey: ["admin", "topics"],
     queryFn: () => getTopicsFn(),
   });
+
+  const announcementsQ = useQuery({
+    queryKey: ["admin", "announcements"],
+    queryFn: () => getAnnouncementsFn(),
+  });
+
+  // Announcement management state
+  const [newAnnTitle, setNewAnnTitle] = useState("");
+  const [newAnnContent, setNewAnnContent] = useState("");
+  const [newAnnPriority, setNewAnnPriority] = useState<"normal" | "urgent" | "low">("normal");
+  const [newAnnPinned, setNewAnnPinned] = useState(false);
+  const [annCreating, setAnnCreating] = useState(false);
 
   // ── State ──
   const [openTeam, setOpenTeam] = useState<string | null>(null);
@@ -194,8 +216,35 @@ function AdminDashboard() {
   });
   const delSubMut = useMutation({
     mutationFn: (id: string) => delSubFn({ data: { id } }),
+    onMutate: async (id: string) => {
+      setDeletingSubId(id);
+      await queryClient.cancelQueries({ queryKey: ["admin", "teams"] });
+      const previousTeams = queryClient.getQueryData<TeamRow[]>(["admin", "teams"]);
+
+      if (previousTeams) {
+        queryClient.setQueryData<TeamRow[]>(["admin", "teams"], (old) => {
+          if (!old) return [];
+          return old.map((t) => ({
+            ...t,
+            submissions: (t.submissions || []).filter((s) => s.id !== id),
+          }));
+        });
+      }
+
+      return { previousTeams };
+    },
+    onError: (err: any, _id, context) => {
+      if (context?.previousTeams) {
+        queryClient.setQueryData(["admin", "teams"], context.previousTeams);
+      }
+      alert("Failed to delete submission: " + (err?.message || "Unknown error"));
+    },
     onSuccess: () => {
       setSelectedSub(null);
+    },
+    onSettled: () => {
+      setDeletingSubId(null);
+      queryClient.invalidateQueries({ queryKey: ["admin", "teams"] });
       teamsQ.refetch();
     },
   });
@@ -216,6 +265,28 @@ function AdminDashboard() {
       setTimeout(() => setTopicSaveState("idle"), 2000);
     },
     onError: () => setTopicSaveState("error"),
+  });
+
+  const createAnnMut = useMutation({
+    mutationFn: (data: { title: string; content: string; priority: "normal" | "urgent" | "low"; pinned: boolean }) =>
+      createAnnFn({ data }),
+    onSuccess: () => {
+      setNewAnnTitle("");
+      setNewAnnContent("");
+      setNewAnnPinned(false);
+      setNewAnnPriority("normal");
+      announcementsQ.refetch();
+    },
+  });
+
+  const togglePublishMut = useMutation({
+    mutationFn: (data: { id: string; published: boolean }) => togglePublishFn({ data }),
+    onSuccess: () => announcementsQ.refetch(),
+  });
+
+  const deleteAnnMut = useMutation({
+    mutationFn: (data: { id: string }) => deleteAnnFn({ data }),
+    onSuccess: () => announcementsQ.refetch(),
   });
 
   // ── Autosave team name ──
@@ -661,7 +732,7 @@ function AdminDashboard() {
             </div>
 
             {/* Teams Grid */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 items-start">
               {filteredTeams.length === 0 && !teamsQ.isLoading && (
                 <p className="col-span-full py-8 text-center text-sm text-slate-500">
                   No matching teams found.
@@ -832,12 +903,19 @@ function AdminDashboard() {
                     </div>
 
                     {/* Action buttons */}
-                    <div className="flex flex-wrap gap-1.5 border-t border-white/5 p-3">
+                    <div className="flex items-center gap-1.5 border-t border-white/5 p-3">
                       <button
                         onClick={() => setOpenTeam(open ? null : t.id)}
-                        className="flex-1 rounded-md border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-slate-100 hover:bg-white/10"
+                        className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                          open
+                            ? "border-amber-300/40 bg-amber-300/15 text-amber-200"
+                            : "border-white/15 bg-white/5 text-slate-200 hover:bg-white/10 hover:text-white"
+                        }`}
                       >
-                        {open ? "Hide" : "View"} Submissions
+                        <span>{open ? "▲ Hide" : "▼ View"} Submissions</span>
+                        <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-mono">
+                          {t.submissions.length}
+                        </span>
                       </button>
                       <button
                         onClick={() => {
@@ -845,25 +923,27 @@ function AdminDashboard() {
                           setEditName(t.name);
                           setEditEmail(t.leader_email || "");
                         }}
-                        className="rounded-md border border-white/15 px-2 py-1.5 text-xs text-slate-200 hover:bg-white/10"
+                        className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10 transition cursor-pointer"
+                        title="Edit team details"
                       >
-                        Edit
+                        ✏️ Edit
                       </button>
                       <button
                         onClick={() => exportTeam(t)}
                         disabled={!t.submissions.length}
-                        className="rounded-md border border-white/15 px-2 py-1.5 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-40"
+                        className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-40 transition cursor-pointer"
+                        title="Export team JSON"
                       >
                         JSON
                       </button>
                     </div>
 
                     {/* Report PDF Buttons */}
-                    <div className="flex flex-wrap gap-1.5 border-t border-white/5 px-3 pb-3">
+                    <div className="flex items-center gap-1.5 border-t border-white/5 px-3 pb-3 pt-2">
                       <button
                         onClick={() => openPdfWindow(generateTeamReport1Page(t))}
                         disabled={!hasDone}
-                        className="flex-1 rounded-md border border-amber-300/40 bg-amber-300/10 px-2 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-300/20 disabled:opacity-40"
+                        className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-amber-300/40 bg-amber-300/10 px-2 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-300/20 disabled:opacity-40 transition cursor-pointer"
                         title="Generate compact 1-page executive scorecard with background watermark logo"
                       >
                         📄 1-Page PDF
@@ -871,7 +951,7 @@ function AdminDashboard() {
                       <button
                         onClick={() => openPdfWindow(generateTeamReport2Page(t))}
                         disabled={!hasDone}
-                        className="flex-1 rounded-md border border-violet-400/40 bg-violet-400/10 px-2 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-400/20 disabled:opacity-40"
+                        className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-violet-400/40 bg-violet-400/10 px-2 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-400/20 disabled:opacity-40 transition cursor-pointer"
                         title="Generate comprehensive 2-page detailed evaluation dossier"
                       >
                         📑 2-Page PDF
@@ -879,23 +959,33 @@ function AdminDashboard() {
                       <button
                         onClick={() => handleSendFeedback(t.id)}
                         disabled={feedbackLoading === t.id || !hasDone}
-                        className="rounded-md border border-sky-400/30 bg-sky-400/5 px-2 py-1.5 text-xs text-sky-300 hover:bg-sky-400/15 disabled:opacity-40"
+                        className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-2.5 py-1.5 text-xs text-sky-300 hover:bg-sky-400/20 disabled:opacity-40 transition cursor-pointer"
+                        title="Send feedback email to team leader"
                       >
                         {feedbackLoading === t.id ? "…" : "📧"}
                       </button>
                       <button
                         onClick={() => setConfirmDelete(t)}
-                        className="rounded-md border border-rose-400/40 px-2 py-1.5 text-xs text-rose-200 hover:bg-rose-500/15"
+                        className="rounded-lg border border-rose-400/30 bg-rose-400/5 px-2.5 py-1.5 text-xs text-rose-300 hover:bg-rose-500/20 hover:border-rose-400 transition cursor-pointer"
+                        title="Delete team"
                       >
-                        ×
+                        🗑️
                       </button>
                     </div>
 
                     {open && (
-                      <div id={`team-${t.id}-panel`} className="space-y-2 border-t border-white/5 bg-black/30 p-3">
+                      <div id={`team-${t.id}-panel`} className="space-y-3 border-t border-white/10 bg-black/40 p-3.5">
+                        <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 px-0.5">
+                          <span>Submissions ({t.submissions.length})</span>
+                          <span className="text-[10px] text-slate-500">Live grading & audit</span>
+                        </div>
+
                         {t.submissions.length === 0 && (
-                          <p className="text-xs text-slate-400">No submissions for this team yet.</p>
+                          <div className="rounded-xl border border-dashed border-white/10 p-4 text-center">
+                            <p className="text-xs text-slate-400">No submissions uploaded for this team yet.</p>
+                          </div>
                         )}
+
                         {t.submissions.map((s) => {
                           const doneCrit = (s.result as any)?.criteria || [];
                           const hasManualPending = doneCrit.some((c: any) =>
@@ -903,55 +993,106 @@ function AdminDashboard() {
                             !c.isManuallyGraded &&
                             (!c.score || c.score === 0)
                           );
+
                           return (
                             <div
                               key={s.id}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2"
+                              className="rounded-xl border border-white/10 bg-white/[0.03] p-3 space-y-2.5 transition hover:border-white/20 hover:bg-white/[0.05]"
                             >
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm text-slate-100">{s.file_name}</p>
-                                <p className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2">
-                                  <span>{new Date(s.created_at).toLocaleString()} · {s.status}</span>
-                                  {s.error && <span className="text-rose-400">· {s.error}</span>}
-                                  {s.status === "done" && (
-                                    hasManualPending ? (
-                                      <span className="rounded bg-amber-400/20 text-amber-300 px-1.5 py-0.5 text-[10px] font-bold">
-                                        ✍️ F7/F8 Pending
-                                      </span>
-                                    ) : (
-                                      <span className="rounded bg-emerald-400/20 text-emerald-300 px-1.5 py-0.5 text-[10px] font-bold">
-                                        ✅ Fully Graded
-                                      </span>
-                                    )
-                                  )}
-                                </p>
+                              {/* Top Line: File name on left, Score badge on right */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs shrink-0">📄</span>
+                                    <span className="truncate text-xs font-semibold text-slate-100 block" title={s.file_name}>
+                                      {s.file_name}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+                                    <span className="font-mono">{new Date(s.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+                                    <span className="text-slate-600">·</span>
+                                    <span className={`capitalize font-medium ${
+                                      s.status === 'done' ? 'text-emerald-400' :
+                                      s.status === 'evaluating' ? 'text-amber-400 animate-pulse' :
+                                      s.status === 'failed' ? 'text-rose-400' : 'text-slate-400'
+                                    }`}>
+                                      {s.status}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Score Pill */}
+                                {s.score != null ? (
+                                  <div className="shrink-0">
+                                    <div className="inline-flex items-baseline gap-0.5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2 py-1 shadow-sm">
+                                      <span className="font-serif text-sm font-bold text-amber-300">{s.score}</span>
+                                      <span className="text-[10px] font-medium text-amber-400/70">/100</span>
+                                    </div>
+                                  </div>
+                                ) : s.status === 'evaluating' ? (
+                                  <span className="shrink-0 rounded-md border border-amber-400/20 bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300 font-medium animate-pulse">
+                                    Evaluating...
+                                  </span>
+                                ) : null}
                               </div>
-                              {s.score != null && (
-                                <span className="shrink-0 text-sm font-semibold text-amber-300">{s.score}/100</span>
-                              )}
-                              <button
-                                onClick={() => setSelectedSub(s)}
-                                disabled={s.status !== "done"}
-                                className="rounded-md border border-amber-300/40 bg-amber-300/10 px-2.5 py-1 text-xs font-medium text-amber-200 hover:bg-amber-300/20 disabled:opacity-40"
-                              >
-                                {hasManualPending ? "✍️ Grade & View" : "View"}
-                              </button>
-                            <button
-                              onClick={() => exportSubmission(t, s)}
-                              disabled={s.status !== "done"}
-                              className="rounded-md border border-white/15 px-2.5 py-1 text-xs text-slate-200 hover:bg-white/10 disabled:opacity-40"
-                            >
-                              JSON
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (confirm("Delete this submission?")) delSubMut.mutate(s.id);
-                              }}
-                              className="rounded-md border border-rose-400/40 px-2.5 py-1 text-xs text-rose-200 hover:bg-rose-500/15"
-                            >
-                              ×
-                            </button>
-                          </div>
+
+                              {/* Badges Line: Manual pending or fully graded */}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {s.status === "done" && (
+                                  hasManualPending ? (
+                                    <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                                      ✍️ F7/F8 Pending Jury
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                                      ✅ Fully Graded
+                                    </span>
+                                  )
+                                )}
+                                {s.error && (
+                                  <span className="rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] text-rose-300 truncate max-w-full">
+                                    ⚠️ {s.error}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Action Buttons: Grade & View, JSON, Delete */}
+                              <div className="flex items-center justify-between gap-2 border-t border-white/5 pt-2">
+                                <button
+                                  onClick={() => setSelectedSub(s)}
+                                  disabled={s.status !== "done"}
+                                  className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-amber-300/40 bg-amber-300/10 px-2.5 py-1.5 text-xs font-semibold text-amber-200 hover:bg-amber-300/20 transition disabled:opacity-40 cursor-pointer"
+                                >
+                                  {hasManualPending ? "✍️ Grade & View" : "👁️ View Result"}
+                                </button>
+                                <button
+                                  onClick={() => exportSubmission(t, s)}
+                                  disabled={s.status !== "done"}
+                                  title="Download JSON report"
+                                  className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-slate-200 hover:bg-white/10 transition disabled:opacity-40 cursor-pointer"
+                                >
+                                  JSON
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={deletingSubId === s.id}
+                                  onClick={() => {
+                                    if (confirm(`Permanently delete "${s.file_name}"? This cannot be undone.`)) {
+                                      delSubMut.mutate(s.id);
+                                    }
+                                  }}
+                                  title="Permanently delete this submission"
+                                  className="inline-flex items-center justify-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/25 hover:border-rose-400 transition disabled:opacity-50 cursor-pointer"
+                                >
+                                  {deletingSubId === s.id ? (
+                                    <div className="h-3.5 w-3.5 animate-spin rounded-full border border-rose-300 border-t-transparent" />
+                                  ) : (
+                                    <span>🗑️</span>
+                                  )}
+                                  <span className="text-[11px]">Delete</span>
+                                </button>
+                              </div>
+                            </div>
                           );
                         })}
                       </div>
@@ -1281,6 +1422,204 @@ function AdminDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* ── Broadcast Announcements & Student Bulletins ── */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-md space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <div>
+                  <h3 className="font-serif text-xl font-bold text-slate-100 flex items-center gap-2">
+                    <span>📢</span> Broadcast Announcements &amp; Updates
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Create and publish official notices. Publishing automatically dispatches score-safe real-time event notifications to registered student portals.
+                  </p>
+                </div>
+                <span className="rounded bg-amber-300/10 border border-amber-300/20 px-2.5 py-1 text-[10px] font-semibold text-amber-300">
+                  {announcementsQ.data?.announcements?.length || 0} Total Bulletins
+                </span>
+              </div>
+
+              {/* Create Announcement Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newAnnTitle.trim() || !newAnnContent.trim()) return;
+                  setAnnCreating(true);
+                  createAnnMut.mutate(
+                    {
+                      title: newAnnTitle.trim(),
+                      content: newAnnContent.trim(),
+                      priority: newAnnPriority,
+                      pinned: newAnnPinned,
+                    },
+                    {
+                      onSettled: () => setAnnCreating(false),
+                    }
+                  );
+                }}
+                className="space-y-4 rounded-2xl border border-white/10 bg-black/40 p-4 sm:p-5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                    + Compose New Announcement
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Visible immediately to student teams upon publishing
+                  </span>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 block mb-1">
+                      Announcement Title *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Live Pitch Round Schedule Released"
+                      value={newAnnTitle}
+                      onChange={(e) => setNewAnnTitle(e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 outline-none focus:border-amber-300/60"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 block mb-1">
+                      Priority Level
+                    </label>
+                    <select
+                      value={newAnnPriority}
+                      onChange={(e) => setNewAnnPriority(e.target.value as any)}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-100 outline-none focus:border-amber-300/60"
+                    >
+                      <option value="normal">Normal Notice</option>
+                      <option value="urgent">⚠️ Urgent Alert</option>
+                      <option value="low">Low Priority</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400 block mb-1">
+                    Announcement Body / Content *
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    placeholder="Enter announcement text to display in the Team Leader portal..."
+                    value={newAnnContent}
+                    onChange={(e) => setNewAnnContent(e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-amber-300/60 resize-none"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={newAnnPinned}
+                      onChange={(e) => setNewAnnPinned(e.target.checked)}
+                      className="rounded border-white/20 bg-black text-amber-300 focus:ring-amber-300"
+                    />
+                    <span>📌 Pin to top of student portals</span>
+                  </label>
+
+                  <button
+                    type="submit"
+                    disabled={annCreating || !newAnnTitle.trim() || !newAnnContent.trim()}
+                    className="rounded-lg bg-amber-300 px-5 py-2 text-xs font-bold text-black hover:bg-amber-200 transition shadow-[0_0_15px_rgba(251,191,36,0.25)] disabled:opacity-40"
+                  >
+                    {annCreating ? "Publishing…" : "Publish Announcement →"}
+                  </button>
+                </div>
+              </form>
+
+              {/* Published / Draft Announcements List */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Active Announcements &amp; Notice History
+                </h4>
+
+                {announcementsQ.isLoading && (
+                  <p className="text-xs text-slate-500 animate-pulse">Loading announcements…</p>
+                )}
+
+                {announcementsQ.data?.announcements?.length === 0 && (
+                  <div className="rounded-xl border border-white/5 bg-black/20 p-6 text-center text-slate-500 text-xs">
+                    No announcements created yet. Post a notice above to inform all team leaders.
+                  </div>
+                )}
+
+                <div className="space-y-2.5">
+                  {(announcementsQ.data?.announcements || []).map((ann) => (
+                    <div
+                      key={ann.id}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 transition ${
+                        ann.published
+                          ? "border-white/10 bg-white/[0.02]"
+                          : "border-white/5 bg-black/30 opacity-60"
+                      }`}
+                    >
+                      <div className="space-y-1 max-w-xl">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {ann.pinned && (
+                            <span className="rounded bg-amber-400/20 border border-amber-400/30 px-1.5 py-0.2 text-[9px] font-bold text-amber-300 uppercase">
+                              📌 Pinned
+                            </span>
+                          )}
+                          {ann.priority === "urgent" && (
+                            <span className="rounded bg-rose-500/20 border border-rose-500/30 px-1.5 py-0.2 text-[9px] font-bold text-rose-300 uppercase">
+                              ⚠️ Urgent
+                            </span>
+                          )}
+                          <span
+                            className={`rounded px-1.5 py-0.2 text-[9px] font-bold uppercase ${
+                              ann.published
+                                ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                                : "bg-slate-700 text-slate-300 border border-slate-600"
+                            }`}
+                          >
+                            {ann.published ? "● Live / Published" : "○ Draft"}
+                          </span>
+                          <span className="font-semibold text-xs text-slate-100">{ann.title}</span>
+                        </div>
+                        <p className="text-xs text-slate-300 line-clamp-2">{ann.content}</p>
+                        <span className="text-[10px] text-slate-500 block">
+                          {new Date(ann.createdAt).toLocaleString()} • Author: {ann.author}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            togglePublishMut.mutate({ id: ann.id, published: !ann.published })
+                          }
+                          className={`rounded border px-2.5 py-1 text-[11px] font-medium transition ${
+                            ann.published
+                              ? "border-amber-300/30 bg-amber-300/10 text-amber-300 hover:bg-amber-300/20"
+                              : "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20"
+                          }`}
+                        >
+                          {ann.published ? "Unpublish" : "Publish"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Delete announcement "${ann.title}"?`)) {
+                              deleteAnnMut.mutate({ id: ann.id });
+                            }
+                          }}
+                          className="rounded border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/20"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </section>
@@ -1976,15 +2315,43 @@ function SubmissionModal({
   const r = currentResult;
   const criteriaList: any[] = r.criteria || [];
 
+  // Separate AI Criteria (F1-F6, F9, F10: max 80)
+  const aiCriteria = criteriaList.filter(
+    (c: any) => c.id !== "F7" && c.id !== "F8" && c.type !== "manual" && c.evalMode !== "manual"
+  );
+  const aiScore = r.ai_evaluation?.score != null
+    ? Number(r.ai_evaluation.score)
+    : aiCriteria.reduce((sum: number, c: any) => sum + (Number(c.score) || 0), 0);
+
+  // Separate Teacher Criteria (F7 & F8: max 10 each, subtotal max 20)
+  const f7ScoreVal = Math.max(0, Math.min(10, Number(editScores["F7"]?.score ?? r.teacher_evaluation?.f7?.score ?? 0)));
+  const f8ScoreVal = Math.max(0, Math.min(10, Number(editScores["F8"]?.score ?? r.teacher_evaluation?.f8?.score ?? 0)));
+  const teacherScore = Math.min(20, Math.max(0, f7ScoreVal + f8ScoreVal));
+
+  // Authoritative Combined Score: Final Score = AI (80 max) + Teacher (20 max)
+  const authoritativeCombined = Math.min(100, Math.max(0, aiScore + teacherScore));
+
   const handleSaveJuryScores = async () => {
     if (!saveManualScoresFn) return;
     setIsSaving(true);
     setSaveError(null);
     try {
+      const validScores: Record<string, { score: number; evidence: string }> = {};
+      const f7Input = Math.max(0, Math.min(10, parseInt(String(editScores["F7"]?.score || 0))));
+      const f8Input = Math.max(0, Math.min(10, parseInt(String(editScores["F8"]?.score || 0))));
+      validScores["F7"] = {
+        score: f7Input,
+        evidence: editScores["F7"]?.evidence || "",
+      };
+      validScores["F8"] = {
+        score: f8Input,
+        evidence: editScores["F8"]?.evidence || "",
+      };
+
       const res = await saveManualScoresFn({
         data: {
           submissionId: submission.id,
-          scores: editScores,
+          scores: validScores,
         },
       });
       if (res?.totalScore != null) {
@@ -2015,7 +2382,7 @@ function SubmissionModal({
         onClick={(e) => e.stopPropagation()}
         className="my-6 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0a0a14] p-5 text-slate-100 shadow-2xl sm:p-7 space-y-6"
       >
-        {/* Header */}
+        {/* Header with Delineated AI Marks vs Teacher Marks vs Combined Score */}
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -2032,20 +2399,62 @@ function SubmissionModal({
               {team?.name || "Proposal Evaluation"}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Hybrid Scoring: <b>AI Evaluation (F1–F6, F9, F10)</b> + <b>Live Jury Evaluation (F7 & F8)</b>
+              Formula: <b>AI Marks (80 max)</b> + <b>Teacher / Jury Marks (20 max)</b> = <b>Final Score (100 max)</b>
             </p>
           </div>
 
-          <div className="flex flex-col items-end">
-            <div className="text-4xl font-bold text-amber-300 font-serif">
-              {currentScore ?? "—"}
-              <span className="text-base text-slate-500 font-sans">/100</span>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* AI Score Component */}
+            <div className="rounded-xl border border-sky-400/30 bg-sky-950/25 px-3 py-1.5 text-center">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-300 block">
+                🤖 AI Marks
+              </span>
+              <span className="font-serif text-lg font-bold text-sky-200">
+                {aiScore}
+                <span className="text-xs text-sky-400/70 font-sans">/80</span>
+              </span>
             </div>
-            <div className="text-xs uppercase tracking-wider text-amber-200/80 font-semibold mt-0.5">
-              {r.overallRating || "Pending Evaluation"}
+
+            <span className="text-base font-bold text-slate-500">+</span>
+
+            {/* Teacher Score Component */}
+            <div className="rounded-xl border border-purple-400/30 bg-purple-950/25 px-3 py-1.5 text-center">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 block">
+                ✍️ Teacher Marks
+              </span>
+              <span className="font-serif text-lg font-bold text-purple-200">
+                {teacherScore}
+                <span className="text-xs text-purple-400/70 font-sans">/20</span>
+              </span>
+            </div>
+
+            <span className="text-base font-bold text-slate-500">=</span>
+
+            {/* Combined Authoritative Score */}
+            <div className="rounded-xl border-2 border-amber-400/60 bg-amber-400/10 px-3.5 py-1.5 text-center shadow-[0_0_20px_rgba(251,191,36,0.15)]">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block">
+                🏆 Final Score
+              </span>
+              <span className="font-serif text-2xl font-black text-amber-300">
+                {currentScore ?? authoritativeCombined}
+                <span className="text-xs text-amber-400/70 font-sans">/100</span>
+              </span>
             </div>
           </div>
         </div>
+
+        {/* Manual Evaluation Status Banner */}
+        {r.teacher_evaluation?.timestamp && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-400/30 bg-purple-950/20 px-4 py-2 text-xs text-purple-200">
+            <span className="flex items-center gap-1.5 font-semibold">
+              <span>✍️</span>
+              <span>Manual Jury Evaluation saved by: <b className="text-white">{r.teacher_evaluation.evaluator || "Judging Panel"}</b></span>
+            </span>
+            <span className="text-[11px] text-purple-300 font-mono">
+              Last saved: {new Date(r.teacher_evaluation.timestamp).toLocaleString()}
+            </span>
+          </div>
+        )}
 
         {/* Team Leader & Requirements Overview Card */}
         {team && (

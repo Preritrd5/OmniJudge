@@ -27,14 +27,21 @@ export default function ChromeScene({ className = "", intensity = "hero" }: Prop
           if (cancelled || !ref.current) return;
 
           const canvas = ref.current;
-          const renderer = new THREE.WebGLRenderer({
-            canvas,
-            alpha: true,
-            antialias: false, // faster — still looks great
-            powerPreference: "low-power",
-          });
-          // Cap pixel ratio at 1 on mobile, 1.5 on desktop for perf
-          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+          let renderer: any;
+          try {
+            renderer = new THREE.WebGLRenderer({
+              canvas,
+              alpha: true,
+              antialias: false,
+              powerPreference: "low-power",
+              precision: "mediump",
+            });
+          } catch (e) {
+            console.warn("[ChromeScene] WebGL unavailable, falling back:", e);
+            return;
+          }
+          // Cap pixel ratio at 1 on mobile, 1.25 on desktop for perf
+          renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
           renderer.toneMapping = THREE.ACESFilmicToneMapping;
           renderer.toneMappingExposure = 1.05;
 
@@ -120,8 +127,10 @@ export default function ChromeScene({ className = "", intensity = "hero" }: Prop
           resize();
 
           let raf = 0;
+          let isRendering = true;
           const t0 = performance.now();
           const tick = () => {
+            if (!isRendering) return;
             const t = (performance.now() - t0) * 0.001;
             tx += (mx - tx) * 0.06;
             ty += (my - ty) * 0.06;
@@ -138,8 +147,21 @@ export default function ChromeScene({ className = "", intensity = "hero" }: Prop
           };
           tick();
 
+          const onVisibility = () => {
+            if (document.hidden) {
+              isRendering = false;
+              cancelAnimationFrame(raf);
+            } else if (!isRendering) {
+              isRendering = true;
+              raf = requestAnimationFrame(tick);
+            }
+          };
+          document.addEventListener("visibilitychange", onVisibility);
+
           cleanup = () => {
+            isRendering = false;
             cancelAnimationFrame(raf);
+            document.removeEventListener("visibilitychange", onVisibility);
             obs.disconnect();
             window.removeEventListener("pointermove", onMove);
             geo.dispose();

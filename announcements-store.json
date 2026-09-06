@@ -1,0 +1,28 @@
+[
+  {
+    "id": "ann_welcome_2026",
+    "title": "Welcome to Ideathon 2026!",
+    "content": "Welcome teams! Please upload your pitch deck proposal in PDF format (up to 15MB) before the submission deadline. Automated and jury evaluations will follow.",
+    "author": "Ideathon 2026 Organizing Committee",
+    "targetAudience": "all",
+    "priority": "normal",
+    "pinned": true,
+    "isPublished": true,
+    "published": true,
+    "createdAt": "2026-09-06T09:40:20.671Z",
+    "updatedAt": "2026-09-06T09:40:20.688Z"
+  },
+  {
+    "id": "ann_jury_eval",
+    "title": "Live Pitch & Jury Presentation Protocol",
+    "content": "Live presentations (F7: Presentation & Communication, F8: Collaboration & Teamwork) will be scored in real time by the jury panel during in-person presentations.",
+    "author": "Ideathon 2026 Organizing Committee",
+    "targetAudience": "all",
+    "priority": "urgent",
+    "pinned": false,
+    "isPublished": true,
+    "published": true,
+    "createdAt": "2026-09-06T09:40:20.688Z",
+    "updatedAt": "2026-09-06T09:40:20.688Z"
+  }
+]
