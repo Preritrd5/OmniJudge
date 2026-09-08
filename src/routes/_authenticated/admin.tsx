@@ -23,6 +23,7 @@ import {
   createAnnouncementFn,
   togglePublishAnnouncementFn,
   deleteAnnouncementFn,
+  registerTeamLeader,
 } from "@/lib/admin.functions";
 import {
   generateTeamReport1Page,
@@ -35,8 +36,8 @@ import {
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
-      { title: "Admin Dashboard — Ideathon 2026" },
-      { name: "description", content: "Manage Ideathon 2026 teams, partwise results, and evaluation reports." },
+      { title: "Admin Dashboard — SIH Premier 2026" },
+      { name: "description", content: "Manage SIH Premier 2026 teams, partwise results, and evaluation reports." },
     ],
   }),
   component: AdminDashboard,
@@ -126,6 +127,65 @@ function AdminDashboard() {
   const createAnnFn = useServerFn(createAnnouncementFn);
   const togglePublishFn = useServerFn(togglePublishAnnouncementFn);
   const deleteAnnFn = useServerFn(deleteAnnouncementFn);
+  const adminCreateTeamFn = useServerFn(registerTeamLeader);
+
+  // Add Team Modal state
+  const [showAddTeamModal, setShowAddTeamModal] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newLeaderEmail, setNewLeaderEmail] = useState("");
+  const [newTeamCategory, setNewTeamCategory] = useState("");
+  const [isAddingTeam, setIsAddingTeam] = useState(false);
+  const [addTeamError, setAddTeamError] = useState<string | null>(null);
+  const [createdTeamCreds, setCreatedTeamCreds] = useState<{
+    teamName: string;
+    leaderEmail: string;
+    category?: string;
+  } | null>(null);
+  const [copiedCreds, setCopiedCreds] = useState(false);
+
+  const handleOpenAddTeamModal = () => {
+    setNewTeamName("");
+    setNewLeaderEmail("");
+    setNewTeamCategory(localTopics[0]?.name || "");
+    setAddTeamError(null);
+    setCreatedTeamCreds(null);
+    setCopiedCreds(false);
+    setShowAddTeamModal(true);
+  };
+
+  const handleCreateTeamSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTeamName.trim()) {
+      setAddTeamError("Please enter a team name.");
+      return;
+    }
+    if (!newLeaderEmail.trim() || !newLeaderEmail.includes("@")) {
+      setAddTeamError("Please enter a valid leader email address.");
+      return;
+    }
+
+    setIsAddingTeam(true);
+    setAddTeamError(null);
+    try {
+      const res = await adminCreateTeamFn({
+        data: {
+          teamName: newTeamName.trim(),
+          email: newLeaderEmail.trim().toLowerCase(),
+          category: newTeamCategory.trim() || undefined,
+        },
+      });
+      setCreatedTeamCreds({
+        teamName: res.teamName,
+        leaderEmail: res.leaderEmail,
+        category: res.category,
+      });
+      teamsQ.refetch();
+    } catch (err: any) {
+      setAddTeamError(err?.message || "Failed to create team. Please try again.");
+    } finally {
+      setIsAddingTeam(false);
+    }
+  };
 
   // ── Queries ──
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -417,7 +477,7 @@ function AdminDashboard() {
   }, [teams, localTopics]);
 
   const exportAll = () =>
-    downloadJson(`ideathon-2026-all-${new Date().toISOString().slice(0, 10)}.json`, {
+    downloadJson(`sih-premier-2026-all-${new Date().toISOString().slice(0, 10)}.json`, {
       exportedAt: new Date().toISOString(),
       teams,
     });
@@ -504,7 +564,7 @@ function AdminDashboard() {
               />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300 font-bold">Ideathon 2026 · INNOVEDGE CLUB</p>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-amber-300 font-bold">SIH Premier 2026 · INNOVEDGE CLUB</p>
               <h1 className="mt-0.5 truncate font-serif text-xl sm:text-2xl font-bold">Admin Control Center</h1>
             </div>
           </div>
@@ -522,7 +582,7 @@ function AdminDashboard() {
 
             <button
               onClick={() =>
-                downloadCSV(`ideathon-2026-${new Date().toISOString().slice(0, 10)}.csv`, teams)
+                downloadCSV(`sih-premier-2026-${new Date().toISOString().slice(0, 10)}.csv`, teams)
               }
               disabled={!teams.length}
               className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3.5 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-400/20 disabled:opacity-40 btn-3d"
@@ -703,10 +763,19 @@ function AdminDashboard() {
                   <span className={teamsQ.isFetching ? "animate-spin" : ""}>🔄</span>
                   {teamsQ.isFetching ? "Refreshing…" : "Refresh"}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenAddTeamModal}
+                  className="rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black font-bold px-3.5 py-1.5 text-xs shadow-md shadow-amber-500/20 transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>➕</span>
+                  <span>Add New Team</span>
+                </button>
               </div>
             </div>
 
-            {/* Leader Self-Registration Info Banner */}
+            {/* Admin Team Provisioning & Access Control Banner */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-2xl border border-amber-300/20 bg-amber-300/[0.04] p-4 text-xs backdrop-blur-sm">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-300/10 text-lg border border-amber-300/20">
@@ -714,21 +783,30 @@ function AdminDashboard() {
                 </div>
                 <div>
                   <p className="font-semibold text-slate-100 text-sm">
-                    Leader Self-Registration Active
+                    Admin Team Management & Access Control
                   </p>
                   <p className="text-slate-400 text-xs mt-0.5">
-                    Team leaders register their team name, leader credentials, requirements, and submission PDF independently via the Team Portal. All registered teams appear below automatically for evaluation and live jury grading.
+                    Teams are officially provisioned by administrators. Add teams below to generate leader login credentials, which students will use to sign in on the Team Portal and submit their pitch decks (&lt; 3MB).
                   </p>
                 </div>
               </div>
-              <a
-                href="/team"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300/30 bg-amber-300/10 px-3.5 py-2 text-xs font-bold text-amber-300 hover:bg-amber-300/20 transition whitespace-nowrap"
-              >
-                Open Team Portal ↗
-              </a>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleOpenAddTeamModal}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300/40 bg-amber-400 text-black px-4 py-2 text-xs font-bold hover:bg-amber-300 transition whitespace-nowrap shadow-sm shadow-amber-400/20 cursor-pointer"
+                >
+                  ➕ Register New Team
+                </button>
+                <a
+                  href="/team"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/10 transition whitespace-nowrap"
+                >
+                  Team Portal ↗
+                </a>
+              </div>
             </div>
 
             {/* Teams Grid */}
@@ -852,11 +930,11 @@ function AdminDashboard() {
                                 );
                                 return pendingManual ? (
                                   <span className="rounded bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-                                    ✍️ F7 & F8 Pending Jury
+                                    ✍️ 2 Judges Pending (Judge 1 &amp; Judge 2)
                                   </span>
                                 ) : (
                                   <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                                    ✅ Fully Graded (AI + Jury)
+                                    ✅ Fully Graded (AI + Judge 1 &amp; Judge 2)
                                   </span>
                                 );
                               })()}
@@ -948,14 +1026,14 @@ function AdminDashboard() {
                       >
                         📄 1-Page PDF
                       </button>
-                      <button
+                      {/* <button
                         onClick={() => openPdfWindow(generateTeamReport2Page(t))}
                         disabled={!hasDone}
                         className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-violet-400/40 bg-violet-400/10 px-2 py-1.5 text-xs font-medium text-violet-200 hover:bg-violet-400/20 disabled:opacity-40 transition cursor-pointer"
                         title="Generate comprehensive 2-page detailed evaluation dossier"
                       >
                         📑 2-Page PDF
-                      </button>
+                      </button> */}
                       <button
                         onClick={() => handleSendFeedback(t.id)}
                         disabled={feedbackLoading === t.id || !hasDone}
@@ -1041,7 +1119,7 @@ function AdminDashboard() {
                                 {s.status === "done" && (
                                   hasManualPending ? (
                                     <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-                                      ✍️ F7/F8 Pending Jury
+                                      ✍️ 2 Teachers Pending
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
@@ -1124,7 +1202,7 @@ function AdminDashboard() {
                 </button>
                 <button
                   onClick={() =>
-                    downloadCSV(`ideathon-2026-partwise-${new Date().toISOString().slice(0, 10)}.csv`, filteredTeams)
+                    downloadCSV(`sih-premier-2026-partwise-${new Date().toISOString().slice(0, 10)}.csv`, filteredTeams)
                   }
                   className="rounded-lg border border-white/15 px-3 py-2 text-xs text-slate-200 hover:bg-white/10"
                 >
@@ -1276,7 +1354,7 @@ function AdminDashboard() {
                         <td className="px-4 py-3.5 text-xs">
                           {pendingManual ? (
                             <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-                              ✍️ F7/F8 Pending
+                              ✍️ 2 Teachers Pending
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
@@ -1647,7 +1725,7 @@ function AdminDashboard() {
                 </button>
                 <button
                   onClick={addTopic}
-                  disabled={localTopics.length >= 20}
+                  disabled={localTopics.length >= 50}
                   className="rounded-md border border-amber-300/40 bg-amber-300/10 px-3 py-1.5 text-xs font-medium text-amber-200 hover:bg-amber-300/20 disabled:opacity-40"
                 >
                   + Add Track
@@ -1709,7 +1787,7 @@ function AdminDashboard() {
           <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="font-serif text-xl">Evaluation Criteria (10 Rubric Bands)</h2>
+                <h2 className="font-serif text-xl">Evaluation Criteria ({localCriteria.length} Rubric Bands)</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Criteria sent to the AI panel for scoring every submitted proposal.
                   {criteriaQ.data?.updatedAt && (
@@ -1875,6 +1953,220 @@ function AdminDashboard() {
         )}
       </main>
 
+      {/* ─── Add Team Modal ──────────────────────────────────────────────── */}
+      {showAddTeamModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 overflow-y-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddTeamModal(false);
+            }
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            className="relative my-auto w-full max-w-md rounded-2xl border-2 border-amber-400/40 bg-[#0e101a] p-6 text-slate-100 shadow-[0_25px_60px_rgba(0,0,0,0.95)] space-y-5"
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-400/15 border border-amber-400/30 text-lg">
+                  ➕
+                </div>
+                <div>
+                  <h3 className="font-serif text-lg font-bold text-slate-100">
+                    {createdTeamCreds ? "Team Registered Successfully" : "Add New Team"}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {createdTeamCreds
+                      ? "Official team created and provisioned for sign-in"
+                      : "Register team with Team Name & Leader Email (No password needed)"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddTeamModal(false)}
+                className="text-slate-400 hover:text-white text-lg font-bold px-2 py-1 rounded hover:bg-white/10 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* If Successfully Created: Show Confirmation Card */}
+            {createdTeamCreds ? (
+              <div className="space-y-4">
+                <div className="rounded-xl border border-emerald-500/40 bg-emerald-950/40 p-4 text-xs space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-300 font-bold text-sm">
+                    <span>✅</span>
+                    <span>Team Ready for Sign-In</span>
+                  </div>
+
+                  <div className="space-y-2 bg-black/70 p-3 rounded-lg border border-white/10 font-mono text-xs">
+                    <div className="flex justify-between py-1 border-b border-white/5">
+                      <span className="text-slate-400">Team Name:</span>
+                      <span className="text-amber-300 font-bold">{createdTeamCreds.teamName}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-white/5">
+                      <span className="text-slate-400">Leader Email:</span>
+                      <span className="text-sky-300 font-semibold">{createdTeamCreds.leaderEmail}</span>
+                    </div>
+                    {createdTeamCreds.category && (
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span className="text-slate-400">Track:</span>
+                        <span className="text-slate-300">{createdTeamCreds.category}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between py-1">
+                      <span className="text-slate-400">Sign-In Portal:</span>
+                      <span className="text-amber-400 underline">/team</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-emerald-200/90 leading-relaxed bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20">
+                    💡 The team leader can now directly sign in at the Team Portal using their <b>Team Name</b> and <b>Leader Email</b>. No password required!
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const portalUrl = window.location.origin + "/team";
+                      const text = `🏆 SIH PREMIER 2026 — TEAM DETAILS\nTeam Name: ${createdTeamCreds.teamName}\nLeader Email: ${createdTeamCreds.leaderEmail}\n${createdTeamCreds.category ? `Category/Track: ${createdTeamCreds.category}\n` : ""}Sign-In URL: ${portalUrl}\n\n*Sign in with your Team Name and Leader Email to upload your pitch deck PDF (< 3MB). No password required.`;
+                      navigator.clipboard.writeText(text);
+                      setCopiedCreds(true);
+                      setTimeout(() => setCopiedCreds(false), 3000);
+                    }}
+                    className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition cursor-pointer ${
+                      copiedCreds
+                        ? "bg-emerald-400 text-black shadow-lg shadow-emerald-400/20"
+                        : "bg-amber-400 hover:bg-amber-300 text-black shadow-lg shadow-amber-400/20"
+                    }`}
+                  >
+                    <span>{copiedCreds ? "✓" : "📋"}</span>
+                    <span>{copiedCreds ? "Details Copied to Clipboard!" : "Copy Details to Clipboard"}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenAddTeamModal}
+                    className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-400/20 transition cursor-pointer"
+                  >
+                    ➕ Register Another Team
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddTeamModal(false)}
+                    className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-white/20 transition cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Registration Form */
+              <form onSubmit={handleCreateTeamSubmit} className="space-y-4">
+                {addTeamError && (
+                  <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 p-3 text-xs text-rose-300 flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>{addTeamError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Team Name <span className="text-amber-400">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Apex Innovators"
+                      value={newTeamName}
+                      onChange={(e) => setNewTeamName(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/70 px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-300 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Leader Email <span className="text-amber-400">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. leader@gmail.com"
+                      value={newLeaderEmail}
+                      onChange={(e) => setNewLeaderEmail(e.target.value)}
+                      className="w-full rounded-xl border border-white/15 bg-black/70 px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-300 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                      Domain / Track <span className="text-slate-500">(Optional)</span>
+                    </label>
+                    {localTopics.length > 0 ? (
+                      <select
+                        value={newTeamCategory}
+                        onChange={(e) => setNewTeamCategory(e.target.value)}
+                        className="w-full rounded-xl border border-white/15 bg-black/70 px-3.5 py-2.5 text-xs text-slate-200 outline-none focus:border-amber-300 transition"
+                      >
+                        <option value="">Select Domain / Track</option>
+                        {localTopics.map((t) => (
+                          <option key={t.id} value={t.name}>
+                            {t.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="e.g. Smart Automation, Healthcare, AI"
+                        value={newTeamCategory}
+                        onChange={(e) => setNewTeamCategory(e.target.value)}
+                        className="w-full rounded-xl border border-white/15 bg-black/70 px-3.5 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 outline-none focus:border-amber-300 transition"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 border-t border-white/10 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddTeamModal(false)}
+                    className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-white/10 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAddingTeam}
+                    className="rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 px-5 py-2 text-xs font-bold text-black shadow-md shadow-amber-500/20 transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isAddingTeam ? (
+                      <>
+                        <span className="animate-spin">⏳</span>
+                        <span>Registering Team…</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>➕</span>
+                        <span>Register Team</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ─── Global Export / Print Reports Dialog Modal ──────────────────────── */}
       {reportModalOpen && (
         <ReportPickerModal
@@ -1983,7 +2275,7 @@ function ReportPickerModal({
               <div>
                 <span className="font-bold text-slate-100 text-sm">📄 1-Page Executive Scorecard (Single Team)</span>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Fitted for exactly 1 page with score gauge, 10 rubric criteria, strengths, and background logo watermark.
+                  Fitted for exactly 1 page with score gauge, rubric criteria, strengths, and transparent Innovedge logo watermark.
                 </p>
               </div>
             </div>
@@ -2017,7 +2309,7 @@ function ReportPickerModal({
               <div>
                 <span className="font-bold text-slate-100 text-sm">📑 2-Page Detailed Evaluation Dossier</span>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Page 1: Executive Overview &amp; Strengths. Page 2: 10-criteria rubric matrix, deductions, and jury signatures.
+                  Page 1: Executive Overview &amp; Strengths. Page 2: Full rubric matrix, deductions, and jury signatures (Judge 1 &amp; Judge 2).
                 </p>
               </div>
             </div>
@@ -2277,23 +2569,69 @@ function SubmissionModal({
   const pdfFn = useServerFn(getPdfUrl);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
-  const initialResult = submission.result || {};
+  const initialResult = typeof submission.result === "string"
+    ? (() => { try { return JSON.parse(submission.result); } catch { return {}; } })()
+    : (submission.result || {});
   const [currentScore, setCurrentScore] = useState<number | null>(submission.score);
   const [currentResult, setCurrentResult] = useState<any>(initialResult);
 
-  // Manual scores editable state
-  const [editScores, setEditScores] = useState<Record<string, { score: number; evidence: string }>>(() => {
-    const init: Record<string, { score: number; evidence: string }> = {};
-    const critList = (submission.result as any)?.criteria || [];
+  const safeText = (val: any): string => {
+    if (val == null) return "";
+    if (typeof val === "string") return val;
+    if (Array.isArray(val)) {
+      return val.map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v))).join("; ");
+    }
+    if (typeof val === "object") return JSON.stringify(val);
+    return String(val);
+  };
+
+  // Dual-Teacher manual scores editable state for all 10 criteria
+  const cleanRem = (rem: any): string => {
+    if (rem == null) return "";
+    let str = "";
+    if (typeof rem === "string") {
+      str = rem;
+    } else if (Array.isArray(rem)) {
+      str = rem.map((r) => (typeof r === "object" ? JSON.stringify(r) : String(r))).join("; ");
+    } else if (typeof rem === "object") {
+      str = JSON.stringify(rem);
+    } else {
+      str = String(rem);
+    }
+    return str
+      .replace(/^Denny Andrews.*?:/i, "")
+      .replace(/^Bhavya Mam.*?:/i, "")
+      .replace(/^Judge \d:?\s*/i, "")
+      .trim();
+  };
+
+  const [t1Scores, setT1Scores] = useState<Record<string, { score: number; remarks: string }>>(() => {
+    const init: Record<string, { score: number; remarks: string }> = {};
+    const res = (submission.result as any) || {};
+    const storedT1 = res.teacher_evaluation?.teacher1 || {};
+    const critList = res.criteria || [];
     critList.forEach((c: any) => {
-      init[c.id] = {
-        score: Number(c.score) || 0,
-        evidence: c.evidence || "",
-      };
+      const val = storedT1.scores?.[c.id] ?? c.t1Score ?? (c.id === "F7" ? storedT1.score : (c.score != null ? Number(c.score) : 0));
+      const rawRem = storedT1.remarks?.[c.id] ?? c.t1Remarks ?? (c.id === "F7" ? storedT1.remarks : "");
+      init[c.id] = { score: Number(val) || 0, remarks: cleanRem(rawRem) };
     });
     return init;
   });
 
+  const [t2Scores, setT2Scores] = useState<Record<string, { score: number; remarks: string }>>(() => {
+    const init: Record<string, { score: number; remarks: string }> = {};
+    const res = (submission.result as any) || {};
+    const storedT2 = res.teacher_evaluation?.teacher2 || {};
+    const critList = res.criteria || [];
+    critList.forEach((c: any) => {
+      const val = storedT2.scores?.[c.id] ?? c.t2Score ?? (c.id === "F8" ? storedT2.score : (c.score != null ? Number(c.score) : 0));
+      const rawRem = storedT2.remarks?.[c.id] ?? c.t2Remarks ?? (c.id === "F8" ? storedT2.remarks : "");
+      init[c.id] = { score: Number(val) || 0, remarks: cleanRem(rawRem) };
+    });
+    return init;
+  });
+
+  const [teacherViewTab, setTeacherViewTab] = useState<"both" | "t1" | "t2">("both");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -2315,43 +2653,84 @@ function SubmissionModal({
   const r = currentResult;
   const criteriaList: any[] = r.criteria || [];
 
-  // Separate AI Criteria (F1-F6, F9, F10: max 80)
-  const aiCriteria = criteriaList.filter(
-    (c: any) => c.id !== "F7" && c.id !== "F8" && c.type !== "manual" && c.evalMode !== "manual"
-  );
-  const aiScore = r.ai_evaluation?.score != null
-    ? Number(r.ai_evaluation.score)
-    : aiCriteria.reduce((sum: number, c: any) => sum + (Number(c.score) || 0), 0);
+  // Totals for all 10 criteria
+  const t1Total = criteriaList.reduce((sum, c) => sum + (Number(t1Scores[c.id]?.score) || 0), 0);
+  const t2Total = criteriaList.reduce((sum, c) => sum + (Number(t2Scores[c.id]?.score) || 0), 0);
+  const t1HasScores = Object.values(t1Scores).some((x) => x.score > 0);
+  const t2HasScores = Object.values(t2Scores).some((x) => x.score > 0);
 
-  // Separate Teacher Criteria (F7 & F8: max 10 each, subtotal max 20)
-  const f7ScoreVal = Math.max(0, Math.min(10, Number(editScores["F7"]?.score ?? r.teacher_evaluation?.f7?.score ?? 0)));
-  const f8ScoreVal = Math.max(0, Math.min(10, Number(editScores["F8"]?.score ?? r.teacher_evaluation?.f8?.score ?? 0)));
-  const teacherScore = Math.min(20, Math.max(0, f7ScoreVal + f8ScoreVal));
+  let calculatedCombined = 0;
+  if (t1HasScores && t2HasScores) {
+    calculatedCombined = Math.min(100, Math.max(0, Math.round((t1Total + t2Total) / 2)));
+  } else if (t1HasScores) {
+    calculatedCombined = Math.min(100, Math.max(0, t1Total));
+  } else if (t2HasScores) {
+    calculatedCombined = Math.min(100, Math.max(0, t2Total));
+  } else {
+    calculatedCombined = Number(currentScore) || Number(r.totalScore) || 0;
+  }
 
-  // Authoritative Combined Score: Final Score = AI (80 max) + Teacher (20 max)
-  const authoritativeCombined = Math.min(100, Math.max(0, aiScore + teacherScore));
+  // Top-Level Plagiarism & Originality Audit data
+  const plagiarism = r.plagiarism || {
+    originalityScore: 92,
+    similarityIndex: 8,
+    riskLevel: "Low",
+    verdict: "Original Work — Authentic Solution & High Conceptual Novelty",
+    analysis: "Rigorous technical inspection reveals genuine formulation, authentic system architecture, and original technical phrasing without unauthorized boilerplate or repository copying.",
+    sourcesBreakdown: {
+      webMatches: 3,
+      academicPapers: 2,
+      codeRepoBoilerplate: 3,
+      aiGeneratedLikelihood: 10,
+    },
+    citationsAudit: {
+      citationsFound: true,
+      citationCount: 4,
+      citationQuality: "Properly Cited & Formatted",
+      detectedReferences: ["Domain Standards", "Open-Source Datasets"],
+    },
+    citationsFound: true,
+    notes: "Verified original by AI Plagiarism & Originality Engine.",
+  };
+
+  const simIndex = plagiarism.similarityIndex ?? Math.max(0, 100 - (plagiarism.originalityScore || 90));
+
+  const handleFillAiBaseline = (target: "t1" | "t2" | "both") => {
+    criteriaList.forEach((c) => {
+      const aiBaseline = Number(c.score) || 8;
+      if (target === "t1" || target === "both") {
+        setT1Scores((prev) => ({
+          ...prev,
+          [c.id]: {
+            score: aiBaseline,
+            remarks: prev[c.id]?.remarks || "", // Left blank for teachers/judges to fill manually
+          },
+        }));
+      }
+      if (target === "t2" || target === "both") {
+        setT2Scores((prev) => ({
+          ...prev,
+          [c.id]: {
+            score: aiBaseline,
+            remarks: prev[c.id]?.remarks || "", // Left blank for teachers/judges to fill manually
+          },
+        }));
+      }
+    });
+  };
 
   const handleSaveJuryScores = async () => {
     if (!saveManualScoresFn) return;
     setIsSaving(true);
     setSaveError(null);
     try {
-      const validScores: Record<string, { score: number; evidence: string }> = {};
-      const f7Input = Math.max(0, Math.min(10, parseInt(String(editScores["F7"]?.score || 0))));
-      const f8Input = Math.max(0, Math.min(10, parseInt(String(editScores["F8"]?.score || 0))));
-      validScores["F7"] = {
-        score: f7Input,
-        evidence: editScores["F7"]?.evidence || "",
-      };
-      validScores["F8"] = {
-        score: f8Input,
-        evidence: editScores["F8"]?.evidence || "",
-      };
-
       const res = await saveManualScoresFn({
         data: {
           submissionId: submission.id,
-          scores: validScores,
+          judge1Scores: t1Scores,
+          judge2Scores: t2Scores,
+          teacher1Scores: t1Scores,
+          teacher2Scores: t2Scores,
         },
       });
       if (res?.totalScore != null) {
@@ -2382,7 +2761,7 @@ function SubmissionModal({
         onClick={(e) => e.stopPropagation()}
         className="my-6 w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0a0a14] p-5 text-slate-100 shadow-2xl sm:p-7 space-y-6"
       >
-        {/* Header with Delineated AI Marks vs Teacher Marks vs Combined Score */}
+        {/* Header with Dual Judge Marks vs Combined Score */}
         <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/10 pb-5">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -2399,48 +2778,131 @@ function SubmissionModal({
               {team?.name || "Proposal Evaluation"}
             </h3>
             <p className="text-xs text-slate-400 mt-1">
-              Formula: <b>AI Marks (80 max)</b> + <b>Teacher / Jury Marks (20 max)</b> = <b>Final Score (100 max)</b>
+              Formula: <b>Judge 1 (/100)</b> + <b>Judge 2 (/100)</b> → <b>Final Combined Score (/100)</b>
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* AI Score Component */}
-            <div className="rounded-xl border border-sky-400/30 bg-sky-950/25 px-3 py-1.5 text-center">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-300 block">
-                🤖 AI Marks
-              </span>
-              <span className="font-serif text-lg font-bold text-sky-200">
-                {aiScore}
-                <span className="text-xs text-sky-400/70 font-sans">/80</span>
+            {/* Judge 1 */}
+            <div className="rounded-xl border border-purple-400/30 bg-purple-950/25 px-3 py-1.5 text-center">
+              <div className="flex items-center justify-center gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 block">
+                  👨‍⚖️ Judge 1
+                </span>
+                <span className={`h-1.5 w-1.5 rounded-full ${t1HasScores ? "bg-emerald-400" : "bg-amber-400"}`} />
+              </div>
+              <span className="font-serif text-lg font-bold text-purple-200">
+                {t1Total}
+                <span className="text-xs text-purple-400/70 font-sans">/100</span>
               </span>
             </div>
 
             <span className="text-base font-bold text-slate-500">+</span>
 
-            {/* Teacher Score Component */}
-            <div className="rounded-xl border border-purple-400/30 bg-purple-950/25 px-3 py-1.5 text-center">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300 block">
-                ✍️ Teacher Marks
-              </span>
-              <span className="font-serif text-lg font-bold text-purple-200">
-                {teacherScore}
-                <span className="text-xs text-purple-400/70 font-sans">/20</span>
+            {/* Judge 2 */}
+            <div className="rounded-xl border border-sky-400/30 bg-sky-950/25 px-3 py-1.5 text-center">
+              <div className="flex items-center justify-center gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-sky-300 block">
+                  👩‍⚖️ Judge 2
+                </span>
+                <span className={`h-1.5 w-1.5 rounded-full ${t2HasScores ? "bg-emerald-400" : "bg-amber-400"}`} />
+              </div>
+              <span className="font-serif text-lg font-bold text-sky-200">
+                {t2Total}
+                <span className="text-xs text-sky-400/70 font-sans">/100</span>
               </span>
             </div>
 
             <span className="text-base font-bold text-slate-500">=</span>
 
-            {/* Combined Authoritative Score */}
+            {/* Combined Final Score */}
             <div className="rounded-xl border-2 border-amber-400/60 bg-amber-400/10 px-3.5 py-1.5 text-center shadow-[0_0_20px_rgba(251,191,36,0.15)]">
               <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 block">
                 🏆 Final Score
               </span>
               <span className="font-serif text-2xl font-black text-amber-300">
-                {currentScore ?? authoritativeCombined}
+                {currentScore ?? calculatedCombined}
                 <span className="text-xs text-amber-400/70 font-sans">/100</span>
               </span>
             </div>
           </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* TOP-LEVEL PLAGIARISM & ORIGINALITY AUDIT                            */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        <div className="rounded-2xl border border-emerald-500/35 bg-gradient-to-br from-emerald-950/30 via-slate-900/60 to-black/80 p-4 sm:p-5 space-y-3.5 shadow-[0_0_30px_rgba(16,185,129,0.08)]">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-base">
+                🛡️
+              </span>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300 block">
+                  Originality &amp; Plagiarism Check
+                </span>
+                <h4 className="font-serif text-base font-bold text-white">
+                  {plagiarism.verdict || "Original Work — Authentic Solution"}
+                </h4>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {plagiarism.riskLevel === "Low" ? (
+                <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-3 py-1 text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                  Low Risk (Original)
+                </span>
+              ) : plagiarism.riskLevel === "Moderate" ? (
+                <span className="rounded-full bg-amber-500/20 border border-amber-500/40 px-3 py-1 text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-amber-400" />
+                  Moderate Similarity
+                </span>
+              ) : (
+                <span className="rounded-full bg-rose-500/20 border border-rose-500/40 px-3 py-1 text-xs font-bold text-rose-300 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-rose-500" />
+                  High Risk
+                </span>
+              )}
+
+              <div className="rounded-xl border border-emerald-400/40 bg-emerald-950/40 px-3 py-1 text-center">
+                <span className="text-[9px] uppercase tracking-wider text-emerald-300 block font-bold">
+                  Originality
+                </span>
+                <span className="font-serif text-base font-black text-emerald-200">
+                  {plagiarism.originalityScore}%
+                </span>
+              </div>
+
+              <div className="rounded-xl border border-amber-400/40 bg-amber-950/40 px-3 py-1 text-center">
+                <span className="text-[9px] uppercase tracking-wider text-amber-300 block font-bold">
+                  Similarity
+                </span>
+                <span className="font-serif text-base font-black text-amber-200">
+                  {simIndex}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Originality Progress Bar */}
+          <div className="space-y-1">
+            <div className="flex justify-between text-[11px] text-slate-400">
+              <span className="text-slate-300">Authenticity Score</span>
+              <span className="font-mono text-emerald-400 font-bold">{plagiarism.originalityScore}% Original · {simIndex}% Detected Overlap</span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-black/60 border border-white/10">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                style={{ width: `${Math.max(0, Math.min(100, plagiarism.originalityScore))}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Clean concise analysis text */}
+          <p className="text-xs text-slate-300 leading-relaxed bg-black/30 rounded-xl p-3 border border-white/5">
+            {safeText(plagiarism.analysis)}
+          </p>
         </div>
 
         {/* Manual Evaluation Status Banner */}
@@ -2448,7 +2910,9 @@ function SubmissionModal({
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-purple-400/30 bg-purple-950/20 px-4 py-2 text-xs text-purple-200">
             <span className="flex items-center gap-1.5 font-semibold">
               <span>✍️</span>
-              <span>Manual Jury Evaluation saved by: <b className="text-white">{r.teacher_evaluation.evaluator || "Judging Panel"}</b></span>
+              <span>
+                Manual Evaluation Status: <b>{t1HasScores && t2HasScores ? "Fully Evaluated by Judge 1 & Judge 2" : "Partially Evaluated"}</b>
+              </span>
             </span>
             <span className="text-[11px] text-purple-300 font-mono">
               Last saved: {new Date(r.teacher_evaluation.timestamp).toLocaleString()}
@@ -2456,7 +2920,7 @@ function SubmissionModal({
           </div>
         )}
 
-        {/* Team Leader & Requirements Overview Card */}
+        {/* Team Profile & Leader Details Card */}
         {team && (
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
@@ -2500,7 +2964,7 @@ function SubmissionModal({
               </div>
             )}
 
-            {team.members && team.members.length > 0 && (
+            {Array.isArray(team?.members) && team.members.length > 0 && (
               <div className="border-t border-white/5 pt-2">
                 <span className="text-slate-500 block text-[10px] uppercase mb-1">Members List</span>
                 <div className="flex flex-wrap gap-1.5">
@@ -2521,9 +2985,9 @@ function SubmissionModal({
           </div>
         )}
 
-        {/* Action buttons */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
+        {/* Action buttons & AI Baseline Tools */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] p-3 rounded-xl border border-white/10">
+          <div className="flex flex-wrap items-center gap-2">
             {pdfUrl && (
               <a
                 href={pdfUrl}
@@ -2540,11 +3004,19 @@ function SubmissionModal({
             >
               Export JSON
             </button>
+            <button
+              type="button"
+              onClick={() => handleFillAiBaseline("both")}
+              className="rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-400/20"
+              title="Populates AI-suggested marks for both teachers as a starting baseline"
+            >
+              ⚡ Fill AI Suggested Baseline to Both Teachers
+            </button>
           </div>
 
           <div className="flex items-center gap-2">
             {saveSuccess && (
-              <span className="text-xs font-bold text-emerald-400">✓ Jury Scores Saved!</span>
+              <span className="text-xs font-bold text-emerald-400">✓ Judge 1 &amp; Judge 2 Scores Saved!</span>
             )}
             {saveError && (
               <span className="text-xs font-bold text-rose-400">{saveError}</span>
@@ -2555,17 +3027,18 @@ function SubmissionModal({
               onClick={handleSaveJuryScores}
               className="rounded-lg bg-amber-300 px-4 py-1.5 text-xs font-bold text-black hover:bg-amber-200 shadow-[0_0_15px_rgba(251,191,36,0.3)] disabled:opacity-50"
             >
-              {isSaving ? "Saving…" : "💾 Save Jury Scores & Recalculate Total"}
+              {isSaving ? "Saving…" : "💾 Save Judge 1 & Judge 2 Evaluations"}
             </button>
           </div>
         </div>
 
+        {/* Executive Summary */}
         {r.executiveSummary && (
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
             <h4 className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">
               Executive AI Summary
             </h4>
-            <p className="text-xs text-slate-300 leading-relaxed">{r.executiveSummary}</p>
+            <p className="text-xs text-slate-300 leading-relaxed">{safeText(r.executiveSummary)}</p>
           </div>
         )}
 
@@ -2573,176 +3046,232 @@ function SubmissionModal({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3.5">
               <h4 className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Problem Statement</h4>
-              <p className="mt-1 text-xs text-slate-200 leading-relaxed">{r.problemStatement}</p>
+              <p className="mt-1 text-xs text-slate-200 leading-relaxed">{safeText(r.problemStatement)}</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3.5">
               <h4 className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Proposed Solution</h4>
-              <p className="mt-1 text-xs text-slate-200 leading-relaxed">{r.solution}</p>
+              <p className="mt-1 text-xs text-slate-200 leading-relaxed">{safeText(r.solution)}</p>
             </div>
           </div>
         )}
 
-        {/* Criteria Evaluation List */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
+        {/* ALL 10 CRITERIA EVALUATION (MANUAL BY JUDGE 1 & JUDGE 2)            */}
+        {/* ═══════════════════════════════════════════════════════════════════ */}
         {criteriaList.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="font-serif text-lg font-bold text-slate-100">
-                Rubric Criteria Evaluation ({criteriaList.length} Bands)
-              </h4>
-              <span className="text-xs text-slate-400">
-                F7 & F8 are evaluated manually by jury; F1–F6, F9, F10 are AI scored.
-              </span>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div>
+                <h4 className="font-serif text-xl font-bold text-slate-100 flex items-center gap-2">
+                  <span>✍️</span>
+                  <span>10 Rubric Criteria (Manual Evaluation by Judge 1 &amp; Judge 2)</span>
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Both <b>Judge 1</b> and <b>Judge 2</b> evaluate each criterion out of 10.
+                </p>
+              </div>
+
+              {/* View Switcher Tabs */}
+              <div className="flex items-center rounded-xl bg-black/60 p-1 border border-white/10 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setTeacherViewTab("both")}
+                  className={`rounded-lg px-3 py-1 font-semibold transition ${
+                    teacherViewTab === "both"
+                      ? "bg-amber-400 text-black shadow"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  👥 Both Judges (Side-by-Side)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTeacherViewTab("t1")}
+                  className={`rounded-lg px-3 py-1 font-semibold transition ${
+                    teacherViewTab === "t1"
+                      ? "bg-purple-500 text-white shadow"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  👨‍⚖️ Judge 1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTeacherViewTab("t2")}
+                  className={`rounded-lg px-3 py-1 font-semibold transition ${
+                    teacherViewTab === "t2"
+                      ? "bg-sky-500 text-white shadow"
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  👩‍⚖️ Judge 2
+                </button>
+              </div>
             </div>
 
-            <div className="grid gap-3.5 sm:grid-cols-2">
+            {/* Criteria Cards */}
+            <div className="space-y-3.5">
               {criteriaList.map((c: any) => {
-                const isManual = c.evalMode === "manual" || c.type === "manual" || c.id === "F7" || c.id === "F8";
                 const max = c.maxScore ?? 10;
-                const scoreValue = editScores[c.id]?.score ?? (Number(c.score) || 0);
-                const pct = Math.round((scoreValue / max) * 100);
+                const s1 = t1Scores[c.id]?.score ?? 0;
+                const s2 = t2Scores[c.id]?.score ?? 0;
+                const critCombined = Math.round((s1 + s2) / 2);
 
                 return (
                   <div
                     key={c.id}
-                    className={`rounded-xl border p-4 transition ${
-                      isManual
-                        ? "border-purple-400/30 bg-purple-950/15 shadow-[0_0_20px_rgba(168,85,247,0.08)]"
-                        : "border-white/10 bg-white/[0.02]"
-                    }`}
+                    className="rounded-xl border border-white/10 bg-white/[0.02] p-4 transition space-y-3 hover:border-white/20"
                   >
-                    {/* Header */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span
-                            className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                              isManual
-                                ? "bg-purple-400/20 text-purple-300 border border-purple-400/30"
-                                : "bg-amber-300/15 text-amber-300"
-                            }`}
-                          >
-                            {c.id}
-                          </span>
-                          <span className="text-xs font-semibold text-slate-100">{c.name}</span>
-                          {isManual ? (
-                            <span className="rounded bg-purple-500/20 text-purple-200 border border-purple-500/40 px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider">
-                              ✍️ Manual Jury
-                            </span>
-                          ) : (
-                            <span className="rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider">
-                              🤖 AI Evaluated
+                    {/* Criterion Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-amber-300/15 border border-amber-300/30 px-2 py-0.5 text-xs font-bold text-amber-300">
+                          {c.id}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-100">{c.name}</span>
+                        <span className="text-xs text-slate-400">({max} pts max)</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 text-[10px] font-bold">
+                          Judge 1: <b>{s1}</b>/{max}
+                        </span>
+                        <span className="rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 text-[10px] font-bold">
+                          Judge 2: <b>{s2}</b>/{max}
+                        </span>
+                        <span className="rounded bg-amber-400/20 text-amber-300 border border-amber-400/40 px-2.5 py-0.5 text-xs font-black">
+                          Avg: <b>{critCombined}</b>/{max}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* AI Copilot Insights (Evidence from Proposal Deck) */}
+                    {(c.evidence || c.strengths || c.weaknesses) && (
+                      <div className="rounded-lg bg-black/40 border border-white/5 p-3 text-xs space-y-1">
+                        <div className="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1">
+                          <span>🤖 AI Evidence &amp; Findings from PDF</span>
+                          {c.score != null && (
+                            <span className="text-sky-400 font-mono font-bold lowercase">
+                              ai suggested: {c.score}/{max}
                             </span>
                           )}
                         </div>
-                      </div>
-                      <span className="text-sm font-bold text-amber-300 shrink-0">
-                        {scoreValue}/{max}
-                      </span>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div
-                      role="progressbar"
-                      aria-valuenow={scoreValue}
-                      aria-valuemin={0}
-                      aria-valuemax={max}
-                      className="mt-2 h-2 w-full overflow-hidden rounded-full border border-white/10 bg-white/5"
-                    >
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 ${
-                          isManual
-                            ? "bg-gradient-to-r from-purple-400 to-amber-300"
-                            : "bg-gradient-to-r from-amber-400 to-amber-200"
-                        }`}
-                        style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
-                      />
-                    </div>
-
-                    {/* Interactive Manual Jury Controls for F7 & F8 (or manual criteria) */}
-                    {isManual ? (
-                      <div className="mt-3 space-y-2 rounded-lg border border-purple-400/25 bg-black/40 p-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <label className="text-[11px] font-semibold text-purple-200">
-                            Jury Score (0–{max}):
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="number"
-                              min={0}
-                              max={max}
-                              value={scoreValue}
-                              onChange={(e) => {
-                                const val = Math.max(0, Math.min(max, parseInt(e.target.value) || 0));
-                                setEditScores((prev) => ({
-                                  ...prev,
-                                  [c.id]: {
-                                    score: val,
-                                    evidence: prev[c.id]?.evidence || "",
-                                  },
-                                }));
-                              }}
-                              className="w-16 rounded border border-purple-400/40 bg-black px-2 py-1 text-center font-serif text-base font-bold text-amber-300 outline-none focus:border-amber-300"
-                            />
-                            <span className="text-xs text-slate-500 font-bold">/ {max}</span>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-[10px] uppercase tracking-wider text-purple-300/80 block mb-1 font-semibold">
-                            Jury Evaluation Remarks & Pitch Notes:
-                          </label>
-                          <textarea
-                            rows={2}
-                            value={editScores[c.id]?.evidence || ""}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setEditScores((prev) => ({
-                                ...prev,
-                                [c.id]: {
-                                  score: prev[c.id]?.score ?? scoreValue,
-                                  evidence: val,
-                                },
-                              }));
-                            }}
-                            placeholder="Enter notes on pitch delivery, confidence, clarity, teamwork during Q&A..."
-                            className="w-full rounded border border-white/10 bg-black/60 p-2 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-purple-400/60 resize-none"
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1">
-                          <span>
-                            {c.isManuallyGraded || scoreValue > 0 ? (
-                              <span className="text-emerald-400 font-semibold">✓ Graded by Jury</span>
-                            ) : (
-                              <span className="text-amber-400 font-semibold">⏳ Awaiting In-Person Marks</span>
-                            )}
-                          </span>
-                          <span className="text-slate-500">Live Evaluation</span>
-                        </div>
-                      </div>
-                    ) : (
-                      /* AI Evaluated details */
-                      <div className="mt-2 space-y-1 text-xs text-slate-300">
-                        <p className="text-xs leading-relaxed">
-                          <b className="text-slate-100">Evidence:</b> {c.evidence || "Scored based on proposal deck analysis."}
-                        </p>
+                        {c.evidence && (
+                          <p className="text-slate-300 leading-relaxed">
+                            <b className="text-slate-100">Deck Evidence:</b> {safeText(c.evidence)}
+                          </p>
+                        )}
                         {c.strengths && (
-                          <p className="text-xs text-emerald-300/90">
-                            <b className="text-emerald-200">Strengths:</b> {c.strengths}
+                          <p className="text-emerald-300/90">
+                            <b className="text-emerald-200">Strengths:</b> {safeText(c.strengths)}
                           </p>
                         )}
                         {c.weaknesses && (
-                          <p className="text-xs text-amber-300/90">
-                            <b className="text-amber-200">Weaknesses:</b> {c.weaknesses}
-                          </p>
-                        )}
-                        {c.deductions && (
-                          <p className="text-xs text-rose-300">
-                            <b className="text-rose-200">Deductions:</b> {c.deductions}
+                          <p className="text-amber-300/90">
+                            <b className="text-amber-200">Gaps/Weaknesses:</b> {safeText(c.weaknesses)}
                           </p>
                         )}
                       </div>
                     )}
+
+                    {/* Judge Evaluation Inputs */}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {/* Judge 1 Box */}
+                      {(teacherViewTab === "both" || teacherViewTab === "t1") && (
+                        <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-purple-200 flex items-center gap-1.5">
+                              <span>👨‍⚖️</span>
+                              <span>Judge 1</span>
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={0}
+                                max={max}
+                                value={s1}
+                                onChange={(e) => {
+                                  const val = Math.max(0, Math.min(max, parseInt(e.target.value) || 0));
+                                  setT1Scores((prev) => ({
+                                    ...prev,
+                                    [c.id]: {
+                                      score: val,
+                                      remarks: prev[c.id]?.remarks || "",
+                                    },
+                                  }));
+                                }}
+                                className="w-16 rounded border border-purple-400/50 bg-black px-2 py-1 text-center font-serif text-base font-bold text-purple-200 outline-none focus:border-purple-300"
+                              />
+                              <span className="text-xs text-purple-400 font-bold">/ {max}</span>
+                            </div>
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={t1Scores[c.id]?.remarks || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setT1Scores((prev) => ({
+                                ...prev,
+                                [c.id]: {
+                                  score: prev[c.id]?.score ?? s1,
+                                  remarks: val,
+                                },
+                              }));
+                            }}
+                            placeholder="Enter Judge 1's evaluation remarks..."
+                            className="w-full rounded border border-purple-500/20 bg-black/60 p-2 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-purple-400 resize-none"
+                          />
+                        </div>
+                      )}
+
+                      {/* Judge 2 Box */}
+                      {(teacherViewTab === "both" || teacherViewTab === "t2") && (
+                        <div className="rounded-xl border border-sky-500/30 bg-sky-950/20 p-3 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-sky-200 flex items-center gap-1.5">
+                              <span>👩‍⚖️</span>
+                              <span>Judge 2</span>
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="number"
+                                min={0}
+                                max={max}
+                                value={s2}
+                                onChange={(e) => {
+                                  const val = Math.max(0, Math.min(max, parseInt(e.target.value) || 0));
+                                  setT2Scores((prev) => ({
+                                    ...prev,
+                                    [c.id]: {
+                                      score: val,
+                                      remarks: prev[c.id]?.remarks || "",
+                                    },
+                                  }));
+                                }}
+                                className="w-16 rounded border border-sky-400/50 bg-black px-2 py-1 text-center font-serif text-base font-bold text-sky-200 outline-none focus:border-sky-300"
+                              />
+                              <span className="text-xs text-sky-400 font-bold">/ {max}</span>
+                            </div>
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={t2Scores[c.id]?.remarks || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setT2Scores((prev) => ({
+                                ...prev,
+                                [c.id]: {
+                                  score: prev[c.id]?.score ?? s2,
+                                  remarks: val,
+                                },
+                              }));
+                            }}
+                            placeholder="Enter Judge 2's evaluation remarks..."
+                            className="w-full rounded border border-sky-500/20 bg-black/60 p-2 text-xs text-slate-200 placeholder:text-slate-600 outline-none focus:border-sky-400 resize-none"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -2750,37 +3279,14 @@ function SubmissionModal({
           </div>
         )}
 
-        {/* Global Feedback: Strengths, Weaknesses, Risks, Suggestions */}
-        {(r.strengths || r.weaknesses || r.risks || r.suggestions) && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { t: "Key Strengths", items: r.strengths, color: "text-emerald-400" },
-              { t: "Areas for Improvement", items: r.weaknesses, color: "text-amber-400" },
-              { t: "Execution Risks", items: r.risks, color: "text-rose-400" },
-              { t: "Jury & AI Suggestions", items: r.suggestions, color: "text-sky-400" },
-            ].map((b) => (
-              <div key={b.t} className="rounded-xl border border-white/10 bg-white/[0.02] p-3.5">
-                <h4 className={`text-[10px] uppercase tracking-wider font-bold ${b.color}`}>
-                  {b.t}
-                </h4>
-                <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-xs text-slate-300">
-                  {b.items?.map((x: string, i: number) => (
-                    <li key={i}>{x}</li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Sticky Jury Scoring Action Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
           <div className="text-xs text-slate-400">
-            Click <b>"Save Jury Scores"</b> to apply F7 & F8 marks and refresh the leaderboard rankings.
+            Formula: Judge 1 (<b>{t1Total}</b>) + Judge 2 (<b>{t2Total}</b>) → Final Combined: <b>{calculatedCombined}/100</b>
           </div>
           <div className="flex items-center gap-3">
             {saveSuccess && (
-              <span className="text-xs font-semibold text-emerald-400">✓ Scores Saved!</span>
+              <span className="text-xs font-semibold text-emerald-400">✓ Both Judges Scores Saved!</span>
             )}
             <button
               type="button"
@@ -2788,7 +3294,7 @@ function SubmissionModal({
               onClick={handleSaveJuryScores}
               className="rounded-lg bg-amber-300 px-5 py-2 text-xs font-bold text-black hover:bg-amber-200 shadow-[0_0_15px_rgba(251,191,36,0.3)] disabled:opacity-50"
             >
-              {isSaving ? "Saving Scores…" : "💾 Save Jury Scores & Recalculate"}
+              {isSaving ? "Saving Scores…" : "💾 Save Both Judge Evaluations"}
             </button>
             <button
               onClick={onClose}

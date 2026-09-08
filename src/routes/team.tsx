@@ -20,7 +20,7 @@ import {
 export const Route = createFileRoute("/team")({
   head: () => ({
     meta: [
-      { title: "Team Portal — Ideathon 2026" },
+      { title: "Team Portal — SIH Premier 2026" },
       { name: "description", content: "Team Leader portal: Register team, specify requirements, and submit proposal PDF for AI and live jury evaluation." },
     ],
   }),
@@ -43,23 +43,12 @@ function TeamPortal() {
   const markAllNotificationsReadFn = useServerFn(markAllNotificationsRead);
   const getAnnouncementsFn = useServerFn(getStudentAnnouncements);
 
-  const [authMode, setAuthMode] = useState<"register" | "signin">("register");
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [sessionLeaderName, setSessionLeaderName] = useState<string>("");
 
-  // Registration Form State
-  const [regName, setRegName] = useState("");
-  const [regTeam, setRegTeam] = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regPassword, setRegPassword] = useState("");
-  const [regConfirmPassword, setRegConfirmPassword] = useState("");
-  const [regPhone, setRegPhone] = useState("");
-  const [regLoading, setRegLoading] = useState(false);
-  const [regError, setRegError] = useState<string | null>(null);
-
   // Sign In Form State
+  const [loginTeamName, setLoginTeamName] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -139,12 +128,13 @@ function TeamPortal() {
 
     loadAnnouncements();
 
-    const savedEmail = localStorage.getItem("ideathon_leader_email");
-    const savedName = localStorage.getItem("ideathon_leader_name");
+    const savedEmail = localStorage.getItem("sih_leader_email") || localStorage.getItem("ideathon_leader_email");
+    const savedName = localStorage.getItem("sih_leader_name") || localStorage.getItem("ideathon_leader_name");
+    const savedTeamName = localStorage.getItem("sih_team_name");
     if (savedEmail) {
       setSessionEmail(savedEmail);
       if (savedName) setSessionLeaderName(savedName);
-      loadDashboard(savedEmail);
+      loadDashboard(savedEmail, savedTeamName || undefined);
     } else {
       supabase.auth.getUser().then(({ data }) => {
         if (data.user?.email) {
@@ -163,7 +153,7 @@ function TeamPortal() {
     const interval = setInterval(() => {
       loadNotifications(teamData.id);
       loadAnnouncements();
-      getDashboardFn({ data: { email: sessionEmail } })
+      getDashboardFn({ data: { email: sessionEmail, teamName: teamData.name } })
         .then((res) => {
           if (res?.found && res?.team) {
             setTeamData(res.team);
@@ -174,17 +164,16 @@ function TeamPortal() {
     return () => clearInterval(interval);
   }, [teamData?.id, sessionEmail]);
 
-  const loadDashboard = async (email: string) => {
+  const loadDashboard = async (email: string, teamName?: string) => {
     setDashboardLoading(true);
     try {
-      const res = await getDashboardFn({ data: { email } });
+      const res = await getDashboardFn({ data: { email, teamName } });
       if (res.found && res.team) {
         setTeamData(res.team);
         if (res.team.id) {
           loadNotifications(res.team.id);
         }
-        loadAnnouncements();
-        const p = res.team.profile || {};
+        const p = (res.team.profile || {}) as any;
         if (p.leaderName) setSessionLeaderName(p.leaderName);
         if (p.category) setSelectedTopic(p.category);
         if (p.projectTitle) setProjectTitle(p.projectTitle);
@@ -209,86 +198,44 @@ function TeamPortal() {
     }
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRegError(null);
-
-    if (regPassword !== regConfirmPassword) {
-      setRegError("Passwords do not match.");
-      return;
-    }
-
-    setRegLoading(true);
-    try {
-      const res = await registerLeaderFn({
-        data: {
-          leaderName: regName.trim(),
-          teamName: regTeam.trim(),
-          email: regEmail.trim(),
-          password: regPassword,
-          phone: regPhone.trim() || undefined,
-        },
-      });
-
-      try {
-        const { data: currentAuth } = await supabase.auth.getUser();
-        if (currentAuth?.user?.email !== "admin@admin.com") {
-          await supabase.auth.signInWithPassword({
-            email: regEmail.trim(),
-            password: regPassword,
-          });
-        }
-      } catch {}
-
-      localStorage.setItem("ideathon_leader_email", res.leaderEmail);
-      localStorage.setItem("ideathon_leader_name", res.leaderName);
-      setSessionEmail(res.leaderEmail);
-      setSessionLeaderName(res.leaderName);
-      setLeaderPhone(regPhone.trim());
-      await loadDashboard(res.leaderEmail);
-    } catch (e: any) {
-      setRegError(e?.message || "Registration failed. Please try again.");
-    } finally {
-      setRegLoading(false);
-    }
-  };
-
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
     setLoginLoading(true);
 
     try {
-      const { data: currentAuth } = await supabase.auth.getUser();
-      if (currentAuth?.user?.email !== "admin@admin.com") {
-        await supabase.auth.signInWithPassword({
-          email: loginEmail.trim(),
-          password: loginPassword,
-        });
+      const email = loginEmail.trim().toLowerCase();
+      const teamName = loginTeamName.trim();
+
+      if (!teamName || !email) {
+        throw new Error("Please enter both your Team Name and Leader Email.");
       }
 
-      const email = loginEmail.trim();
-      const res = await getDashboardFn({ data: { email } });
-      if (!res.found) {
-        throw new Error("No registered team found for this email address. Please register as a team leader.");
+      const res = await getDashboardFn({ data: { email, teamName } });
+      if (!res.found || !res.team) {
+        throw new Error("No registered team found matching this Team Name and Email. Please check your credentials or contact the administrator.");
       }
 
-      localStorage.setItem("ideathon_leader_email", email);
+      localStorage.setItem("sih_leader_email", email);
+      localStorage.setItem("sih_team_name", res.team.name);
       if (res.team?.profile?.leaderName) {
-        localStorage.setItem("ideathon_leader_name", res.team.profile.leaderName);
+        localStorage.setItem("sih_leader_name", res.team.profile.leaderName);
         setSessionLeaderName(res.team.profile.leaderName);
       }
       setSessionEmail(email);
       setTeamData(res.team);
-      await loadDashboard(email);
+      await loadDashboard(email, res.team.name);
     } catch (e: any) {
-      setLoginError(e?.message || "Sign in failed. Check your email and password.");
+      setLoginError(e?.message || "Sign in failed. Check your Team Name and Leader Email.");
     } finally {
       setLoginLoading(false);
     }
   };
 
   const handleSignOut = async () => {
+    localStorage.removeItem("sih_leader_email");
+    localStorage.removeItem("sih_team_name");
+    localStorage.removeItem("sih_leader_name");
     localStorage.removeItem("ideathon_leader_email");
     localStorage.removeItem("ideathon_leader_name");
     const { data: currentAuth } = await supabase.auth.getUser();
@@ -352,6 +299,10 @@ function TeamPortal() {
     if (!f) return;
     if (f.type !== "application/pdf" && !f.name.toLowerCase().endsWith(".pdf")) {
       setUploadError("Please upload a PDF file only.");
+      return;
+    }
+    if (f.size > 3 * 1024 * 1024) {
+      setUploadError("PDF file size must be less than 3 MB.");
       return;
     }
     setUploadError(null);
@@ -438,12 +389,18 @@ function TeamPortal() {
           </div>
           <div>
             <div className="font-serif text-lg font-bold tracking-tight text-slate-100 group-hover:text-amber-300 transition">
-              Ideathon 2026
+              SIH Premier 2026
             </div>
             <div className="text-[10px] uppercase tracking-widest text-slate-400">Team Leader Portal</div>
           </div>
         </Link>
         <div className="flex items-center gap-3">
+          <Link
+            to="/auth"
+            className="rounded-lg border border-purple-400/30 bg-purple-950/40 px-3 py-1.5 text-xs font-semibold text-purple-200 hover:bg-purple-900/50 transition"
+          >
+            👑 Admin Login
+          </Link>
           <ThemeToggle />
 
           {/* {sessionEmail && (
@@ -475,211 +432,67 @@ function TeamPortal() {
       <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
         {!sessionEmail && (
           <div className="mx-auto max-w-md">
-            <div className="flex rounded-xl border border-white/10 bg-white/[0.03] p-1 mb-6 backdrop-blur">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode("register");
-                  setRegError(null);
-                }}
-                className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
-                  authMode === "register"
-                    ? "bg-amber-300 text-black shadow-md"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                👑 Register Team (Leader)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode("signin");
-                  setLoginError(null);
-                }}
-                className={`flex-1 rounded-lg py-2 text-xs font-semibold transition ${
-                  authMode === "signin"
-                    ? "bg-amber-300 text-black shadow-md"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                🔑 Leader Sign In
-              </button>
+            <div className="rounded-2xl border border-white/10 bg-[#0e0d1a]/90 p-7 backdrop-blur-xl shadow-2xl space-y-5">
+              <div className="text-center space-y-1.5">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/10 border border-amber-400/25 text-2xl">
+                  🔑
+                </div>
+                <h1 className="font-serif text-3xl font-bold text-slate-100">
+                  Team Sign In
+                </h1>
+                <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
+                  Enter your official <b>Team Name</b> and <b>Leader Email</b> registered by the administration to access your submission workspace.
+                </p>
+              </div>
+
+              <form onSubmit={handleSignIn} className="space-y-4">
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Team Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Apex Innovators"
+                    value={loginTeamName}
+                    onChange={(e) => setLoginTeamName(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-amber-300/60 transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                    Leader Email ID
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="leader@gmail.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3.5 py-2.5 text-sm text-slate-100 outline-none focus:border-amber-300/60 transition"
+                  />
+                </div>
+
+                {loginError && (
+                  <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
+                    {loginError}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loginLoading}
+                  className="w-full rounded-lg bg-gradient-to-r from-amber-400 to-amber-300 py-3 text-sm font-bold text-black hover:opacity-90 transition shadow-[0_0_20px_rgba(251,191,36,0.35)] disabled:opacity-50 cursor-pointer"
+                >
+                  {loginLoading ? "Signing In…" : "Sign In to Workspace →"}
+                </button>
+              </form>
+
+              <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-center text-[11px] text-slate-400">
+                <span>Teams are registered and managed directly by the <b>SIH Premier 2026 Administration</b>. No password required.</span>
+              </div>
             </div>
-
-            {authMode === "register" && (
-              <div className="rounded-2xl border border-white/10 bg-[#0e0d1a]/80 p-6 backdrop-blur-xl shadow-2xl">
-                <div className="mb-4">
-                  <span className="rounded bg-amber-300/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300 border border-amber-300/20">
-                    Leader Registration Only
-                  </span>
-                  <h1 className="font-serif text-2xl font-bold text-slate-100 mt-2">
-                    Register Your Team
-                  </h1>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Only the team leader registers with their name, email, and password. You will then access your team's private workspace.
-                  </p>
-                </div>
-
-                <form onSubmit={handleRegister} className="space-y-3.5">
-                  <div>
-                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                      Team Leader Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Jane Doe"
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                      Team Name *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. QuantumInnovators"
-                      value={regTeam}
-                      onChange={(e) => setRegTeam(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                      Leader Email ID *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="leader@gmail.com"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                        Password *
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={6}
-                        placeholder="••••••••"
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                        Confirm *
-                      </label>
-                      <input
-                        type="password"
-                        required
-                        minLength={6}
-                        placeholder="••••••••"
-                        value={regConfirmPassword}
-                        onChange={(e) => setRegConfirmPassword(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                      Phone Number (Optional)
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="+91 98765 43210"
-                      value={regPhone}
-                      onChange={(e) => setRegPhone(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
-                    />
-                  </div>
-
-                  {regError && (
-                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
-                      {regError}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={regLoading}
-                    className="w-full rounded-lg bg-amber-300 py-2.5 text-sm font-bold text-black hover:bg-amber-200 transition shadow-[0_0_20px_rgba(251,191,36,0.3)] disabled:opacity-50"
-                  >
-                    {regLoading ? "Registering Team…" : "Register Team & Open Workspace →"}
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {authMode === "signin" && (
-              <div className="rounded-2xl border border-white/10 bg-[#0e0d1a]/80 p-6 backdrop-blur-xl shadow-2xl">
-                <div className="mb-4">
-                  <h1 className="font-serif text-2xl font-bold text-slate-100">
-                    Leader Sign In
-                  </h1>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Sign in with your registered email and password to access your team requirements and proposal status.
-                  </p>
-                </div>
-
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div>
-                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                      Leader Email ID
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      placeholder="leader@gmail.com"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">
-                      Password
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••••••"
-                      value={loginPassword}
-                      onChange={(e) => setLoginPassword(e.target.value)}
-                      className="mt-1 w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-300/60"
-                    />
-                  </div>
-
-                  {loginError && (
-                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-300">
-                      {loginError}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loginLoading}
-                    className="w-full rounded-lg bg-amber-300 py-2.5 text-sm font-bold text-black hover:bg-amber-200 transition shadow-[0_0_20px_rgba(251,191,36,0.3)] disabled:opacity-50"
-                  >
-                    {loginLoading ? "Signing In…" : "Sign In to Workspace →"}
-                  </button>
-                </form>
-              </div>
-            )}
           </div>
         )}
 
@@ -963,7 +776,7 @@ function TeamPortal() {
                   Step 2: Upload Proposal PDF
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Upload your submission deck / proposal in PDF format (max 15 MB). Criteria F1–F6, F9, and F10 will be analyzed by AI; F7 &amp; F8 are evaluated live by judges.
+                  Upload your submission deck / proposal in PDF format (less than 3 MB). Your proposal undergoes an automated Plagiarism &amp; Originality Audit, followed by comprehensive expert evaluation by Judge 1 &amp; Judge 2.
                 </p>
               </div>
 
@@ -1008,7 +821,7 @@ function TeamPortal() {
                     <span className="text-sm font-semibold text-slate-200">
                       Click to browse or drag and drop proposal PDF
                     </span>
-                    <p className="text-xs text-slate-500 mt-1">Single PDF file up to 15 MB</p>
+                    <p className="text-xs text-slate-500 mt-1">Single PDF file less than 3 MB</p>
                   </div>
                 )}
               </div>

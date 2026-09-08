@@ -1,5 +1,385 @@
 [
   {
+    "id": "notif_1788779353097_o4clls",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "AI Evaluation Finished",
+    "message": "AI criteria assessment completed for \"bus.pdf\".",
+    "type": "AI_EVALUATION_COMPLETED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T11:09:13.097Z"
+  },
+  {
+    "id": "notif_1788779294743_geg280",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Evaluation In Progress",
+    "message": "Automated assessment started for \"bus.pdf\".",
+    "type": "EVALUATION_STARTED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T11:08:14.743Z"
+  },
+  {
+    "id": "notif_1788779294339_2rzvry",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Submission Received",
+    "message": "Proposal received for team \"Team Sir\". Queued for evaluation.",
+    "type": "SUBMISSION_RECEIVED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T11:08:14.339Z"
+  },
+  {
+    "id": "notif_1788779294069_69hzdd",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Proposal PDF Uploaded",
+    "message": "Proposal deck \"bus.pdf\" uploaded successfully and verified.",
+    "type": "PDF_UPLOAD_SUCCESS",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T11:08:14.069Z"
+  },
+  {
+    "id": "notif_1788777871613_rcan1i",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "AI Evaluation Finished",
+    "message": "AI criteria assessment completed for \"Anvil Hackathon FAQs.pdf\".",
+    "type": "AI_EVALUATION_COMPLETED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:44:31.613Z"
+  },
+  {
+    "id": "notif_1788777849101_opcm3b",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Evaluation In Progress",
+    "message": "Automated assessment started for \"Anvil Hackathon FAQs.pdf\".",
+    "type": "EVALUATION_STARTED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:44:09.101Z"
+  },
+  {
+    "id": "notif_1788777848914_vlcvvp",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Submission Received",
+    "message": "Proposal received for team \"Team Sir\". Queued for evaluation.",
+    "type": "SUBMISSION_RECEIVED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:44:08.914Z"
+  },
+  {
+    "id": "notif_1788777848704_6ofpol",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Proposal PDF Uploaded",
+    "message": "Proposal deck \"Anvil Hackathon FAQs.pdf\" uploaded successfully and verified.",
+    "type": "PDF_UPLOAD_SUCCESS",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:44:08.702Z"
+  },
+  {
+    "id": "notif_1788776663451_k2fysc",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Evaluation Finalized",
+    "message": "Hybrid evaluation successfully consolidated for \"bus.pdf\".",
+    "type": "COMBINED_RESULT_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:24:23.451Z"
+  },
+  {
+    "id": "notif_1788776663447_hf0rsm",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Teamwork Assessment Recorded",
+    "message": "Collaboration & Teamwork rubric verified by live judging panel.",
+    "type": "F8_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:24:23.447Z"
+  },
+  {
+    "id": "notif_1788776663443_6i3hcf",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Presentation Assessment Recorded",
+    "message": "Presentation & Communication rubric verified by live judging panel.",
+    "type": "F7_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:24:23.443Z"
+  },
+  {
+    "id": "notif_1788776663437_3jvhqh",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Judge Evaluation Recorded",
+    "message": "Manual jury evaluation updated by Judge & Judge for submission \"bus.pdf\".",
+    "type": "TEACHER_EVALUATION_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:24:23.437Z"
+  },
+  {
+    "id": "notif_1788776632533_juyp8i",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "AI Evaluation Finished",
+    "message": "AI criteria assessment completed for \"bus.pdf\".",
+    "type": "AI_EVALUATION_COMPLETED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:23:52.533Z"
+  },
+  {
+    "id": "notif_1788776617273_npgbjg",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Evaluation In Progress",
+    "message": "Automated assessment started for \"bus.pdf\".",
+    "type": "EVALUATION_STARTED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:23:37.272Z"
+  },
+  {
+    "id": "notif_1788776617065_fa01zx",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Submission Received",
+    "message": "Proposal received for team \"Team Sir\". Queued for evaluation.",
+    "type": "SUBMISSION_RECEIVED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:23:37.065Z"
+  },
+  {
+    "id": "notif_1788776616876_46ckj7",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Proposal PDF Uploaded",
+    "message": "Proposal deck \"bus.pdf\" uploaded successfully and verified.",
+    "type": "PDF_UPLOAD_SUCCESS",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:23:36.876Z"
+  },
+  {
+    "id": "notif_1788776516910_nj9lja",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Evaluation Finalized",
+    "message": "Hybrid evaluation successfully consolidated for \"Machine Learning ().pdf\".",
+    "type": "COMBINED_RESULT_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:21:56.910Z"
+  },
+  {
+    "id": "notif_1788776516906_9xr4ef",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Teamwork Assessment Recorded",
+    "message": "Collaboration & Teamwork rubric verified by live judging panel.",
+    "type": "F8_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:21:56.906Z"
+  },
+  {
+    "id": "notif_1788776516902_p108xp",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Presentation Assessment Recorded",
+    "message": "Presentation & Communication rubric verified by live judging panel.",
+    "type": "F7_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:21:56.902Z"
+  },
+  {
+    "id": "notif_1788776516897_nj4m6w",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Judge Evaluation Recorded",
+    "message": "Manual jury evaluation updated by Judge & Judge for submission \"Machine Learning ().pdf\".",
+    "type": "TEACHER_EVALUATION_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:21:56.892Z"
+  },
+  {
+    "id": "notif_1788776486902_kcuox1",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Evaluation Finalized",
+    "message": "Hybrid evaluation successfully consolidated for \"Machine Learning ().pdf\".",
+    "type": "COMBINED_RESULT_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:21:26.902Z"
+  },
+  {
+    "id": "notif_1788776486898_f2xwxz",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Teamwork Assessment Recorded",
+    "message": "Collaboration & Teamwork rubric verified by live judging panel.",
+    "type": "F8_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:21:26.898Z"
+  },
+  {
+    "id": "notif_1788776486893_kxqu4z",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Presentation Assessment Recorded",
+    "message": "Presentation & Communication rubric verified by live judging panel.",
+    "type": "F7_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:21:26.893Z"
+  },
+  {
+    "id": "notif_1788776486881_g6btt9",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Judge Evaluation Recorded",
+    "message": "Manual jury evaluation updated by Judge & Judge for submission \"Machine Learning ().pdf\".",
+    "type": "TEACHER_EVALUATION_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T10:21:26.880Z"
+  },
+  {
+    "id": "notif_1788774140201_mbfgzc",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Evaluation In Progress",
+    "message": "Automated assessment started for \"Machine Learning ().pdf\".",
+    "type": "EVALUATION_STARTED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T09:42:20.201Z"
+  },
+  {
+    "id": "notif_1788774137968_uo4kov",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Submission Received",
+    "message": "Proposal received for team \"Team Sir\". Queued for evaluation.",
+    "type": "SUBMISSION_RECEIVED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T09:42:17.968Z"
+  },
+  {
+    "id": "notif_1788774135092_oc66wp",
+    "recipientTeamId": "2c9d7531-8575-4d7f-a1bb-6febcd318773",
+    "title": "Proposal PDF Uploaded",
+    "message": "Proposal deck \"Machine Learning ().pdf\" uploaded successfully and verified.",
+    "type": "PDF_UPLOAD_SUCCESS",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T09:42:15.092Z"
+  },
+  {
+    "id": "notif_1788769777630_6w8z45",
+    "recipientTeamId": "5d386abd-24bf-4a4c-bc94-31e8b9821c42",
+    "title": "Evaluation In Progress",
+    "message": "Automated assessment started for \"BT001S260226664.pdf\".",
+    "type": "EVALUATION_STARTED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T08:29:37.630Z"
+  },
+  {
+    "id": "notif_1788769777358_bd5f8y",
+    "recipientTeamId": "5d386abd-24bf-4a4c-bc94-31e8b9821c42",
+    "title": "Submission Received",
+    "message": "Proposal received for team \"Team Anki\". Queued for evaluation.",
+    "type": "SUBMISSION_RECEIVED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T08:29:37.358Z"
+  },
+  {
+    "id": "notif_1788769777159_wllmif",
+    "recipientTeamId": "5d386abd-24bf-4a4c-bc94-31e8b9821c42",
+    "title": "Proposal PDF Uploaded",
+    "message": "Proposal deck \"BT001S260226664.pdf\" uploaded successfully and verified.",
+    "type": "PDF_UPLOAD_SUCCESS",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T08:29:37.158Z"
+  },
+  {
+    "id": "notif_1788769541819_pyhcou",
+    "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
+    "title": "Evaluation Finalized",
+    "message": "Hybrid evaluation successfully consolidated for \"BT001S260226664.pdf\".",
+    "type": "COMBINED_RESULT_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T08:25:41.819Z"
+  },
+  {
+    "id": "notif_1788769541817_9espvw",
+    "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
+    "title": "Teamwork Assessment Recorded",
+    "message": "Collaboration & Teamwork rubric verified by live judging panel.",
+    "type": "F8_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T08:25:41.817Z"
+  },
+  {
+    "id": "notif_1788769541815_bjr66u",
+    "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
+    "title": "Presentation Assessment Recorded",
+    "message": "Presentation & Communication rubric verified by live judging panel.",
+    "type": "F7_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T08:25:41.815Z"
+  },
+  {
+    "id": "notif_1788769541811_cicz6b",
+    "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
+    "title": "Judge Evaluation Recorded",
+    "message": "Manual jury evaluation updated by Judge & Judge for submission \"BT001S260226664.pdf\".",
+    "type": "TEACHER_EVALUATION_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T08:25:41.806Z"
+  },
+  {
+    "id": "notif_1788767859318_9hztws",
+    "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
+    "title": "Evaluation Finalized",
+    "message": "Hybrid evaluation successfully consolidated for \"BT001S260226664.pdf\".",
+    "type": "COMBINED_RESULT_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T07:57:39.318Z"
+  },
+  {
+    "id": "notif_1788767859316_k1wymb",
+    "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
+    "title": "Teamwork Assessment Recorded",
+    "message": "Collaboration & Teamwork rubric verified by live judging panel.",
+    "type": "F8_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T07:57:39.316Z"
+  },
+  {
+    "id": "notif_1788767859315_rpi9pp",
+    "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
+    "title": "Presentation Assessment Recorded",
+    "message": "Presentation & Communication rubric verified by live judging panel.",
+    "type": "F7_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T07:57:39.315Z"
+  },
+  {
+    "id": "notif_1788767859307_o51918",
+    "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
+    "title": "Teacher Evaluation Recorded",
+    "message": "Manual jury evaluation updated for submission \"BT001S260226664.pdf\".",
+    "type": "TEACHER_EVALUATION_UPDATED",
+    "isRead": false,
+    "read": false,
+    "createdAt": "2026-09-07T07:57:39.306Z"
+  },
+  {
     "id": "notif_1788702537871_evy31t",
     "recipientTeamId": "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
     "title": "Evaluation Finalized",

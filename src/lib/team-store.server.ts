@@ -1,4 +1,4 @@
-﻿import * as fs from "fs";
+import * as fs from "fs";
 import * as path from "path";
 
 export interface TeamProfile {
@@ -38,6 +38,17 @@ export function findTeamProfileByEmail(email: string): TeamProfile | null {
   const lower = email.toLowerCase().trim();
   for (const t of Object.values(store)) {
     if (t.leaderEmail.toLowerCase().trim() === lower) {
+      return t;
+    }
+  }
+  return null;
+}
+
+export function findTeamProfileByName(name: string): TeamProfile | null {
+  const store = getAllTeamProfiles();
+  const lower = name.toLowerCase().trim();
+  for (const t of Object.values(store)) {
+    if (t.teamName.toLowerCase().trim() === lower) {
       return t;
     }
   }

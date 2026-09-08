@@ -1,60 +1,60 @@
 {
-  "version": 2,
-  "updatedAt": "2026-09-05T10:35:00.000Z",
+  "version": 4,
+  "updatedAt": "2026-09-07T13:05:00.000Z",
   "criteria": [
     {
       "id": "F1",
       "name": "Innovation & Creativity",
       "maxScore": 10,
-      "description": "Novelty of idea & creative problem-solving",
-      "type": "ai",
-      "evalMode": "ai"
+      "description": "Novelty of idea & creative problem-solving (Evaluated manually by Judge 1 & Judge 2)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F2",
       "name": "Technical Feasibility",
       "maxScore": 10,
-      "description": "Complexity, feasibility, and scalability",
-      "type": "ai",
-      "evalMode": "ai"
+      "description": "Complexity, feasibility, and scalability (Evaluated manually by Judge 1 & Judge 2)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F3",
       "name": "User Experience & Design",
       "maxScore": 10,
-      "description": "UI/UX, accessibility, and inclusivity",
-      "type": "ai",
-      "evalMode": "ai"
+      "description": "UI/UX, accessibility, and inclusivity (Evaluated manually by Judge 1 & Judge 2)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F4",
       "name": "Impact & Usefulness",
       "maxScore": 10,
-      "description": "Problem-solution fit, potential impact, and multiple use cases",
-      "type": "ai",
-      "evalMode": "ai"
+      "description": "Problem-solution fit, potential impact, and multiple use cases (Evaluated manually by Judge 1 & Judge 2)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F5",
       "name": "Technical Execution",
       "maxScore": 10,
-      "description": "Prototype, code quality, and technology stack",
-      "type": "ai",
-      "evalMode": "ai"
+      "description": "Prototype, code quality, and technology stack (Evaluated manually by Judge 1 & Judge 2)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F6",
       "name": "Sustainability & Future Scope",
       "maxScore": 10,
-      "description": "Long-term viability & eco-friendly practices",
-      "type": "ai",
-      "evalMode": "ai"
+      "description": "Long-term viability & eco-friendly practices (Evaluated manually by Judge 1 & Judge 2)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F7",
       "name": "Presentation & Communication",
       "maxScore": 10,
-      "description": "Clarity, pitch effectiveness, and Q&A handling (Evaluated manually by jury during live presentation)",
+      "description": "Clarity, pitch effectiveness, and Q&A handling (Evaluated manually by Judge 1 & Judge 2)",
       "type": "manual",
       "evalMode": "manual"
     },
@@ -62,7 +62,7 @@
       "id": "F8",
       "name": "Collaboration & Teamwork",
       "maxScore": 10,
-      "description": "Team dynamics & problem-solving approach (Evaluated manually by jury during live presentation)",
+      "description": "Team dynamics & problem-solving approach (Evaluated manually by Judge 1 & Judge 2)",
       "type": "manual",
       "evalMode": "manual"
     },
@@ -70,17 +70,17 @@
       "id": "F9",
       "name": "Business Viability (if applicable)",
       "maxScore": 10,
-      "description": "Market potential, revenue model, and affordability",
-      "type": "ai",
-      "evalMode": "ai"
+      "description": "Market potential, revenue model, and affordability (Evaluated manually by Judge 1 & Judge 2)",
+      "type": "manual",
+      "evalMode": "manual"
     },
     {
       "id": "F10",
       "name": "Security & Privacy",
       "maxScore": 10,
-      "description": "Data protection & compliance with privacy regulations",
-      "type": "ai",
-      "evalMode": "ai"
+      "description": "Data protection & compliance with privacy regulations (Evaluated manually by Judge 1 & Judge 2)",
+      "type": "manual",
+      "evalMode": "manual"
     }
   ]
 }

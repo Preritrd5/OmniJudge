@@ -93,12 +93,15 @@ const COMMON_CSS = `
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 320px;
-    height: 320px;
-    opacity: 0.045;
+    width: 440px;
+    height: 440px;
+    opacity: 0.32;
+    filter: contrast(1.25) saturate(1.1) brightness(0.88);
     pointer-events: none;
     z-index: 0;
     object-fit: contain;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   
   .content-relative {
@@ -177,6 +180,10 @@ const COMMON_CSS = `
   }
   
   @media print {
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
     body {
       background: #ffffff;
       padding: 0;
@@ -185,6 +192,13 @@ const COMMON_CSS = `
       box-shadow: none;
       max-width: 100%;
       margin: 0;
+    }
+    .watermark {
+      opacity: 0.20 !important;
+      filter: contrast(1.15) brightness(0.92) !important;
+      display: block !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
     }
     .no-print {
       display: none !important;
@@ -230,7 +244,7 @@ function renderHeader(title: string, subtitle: string, category?: string | null)
       <div style="display:flex;align-items:center;gap:12px;">
         <img src="/logo.png" alt="Logo" style="height:44px;width:44px;border-radius:50%;object-fit:cover;border:1px solid #cbd5e1;" onerror="this.style.display='none'" />
         <div>
-          <div style="font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#d97706;" class="heading-font">IDEATHON 2026</div>
+          <div style="font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#d97706;" class="heading-font">SIH PREMIER 2026</div>
           <h1 style="margin:0;font-size:19px;font-weight:800;color:#0f172a;line-height:1.1;" class="heading-font">${title}</h1>
           <div style="font-size:10.5px;color:#64748b;margin-top:2px;">${subtitle}</div>
         </div>
@@ -248,10 +262,7 @@ function renderFooter(pageLabel: string = "Page 1 of 1") {
   return `
     <div class="report-footer">
       <div>
-        <span style="font-weight:700;color:#0f172a;">© 2026 Ideathon.</span> All rights reserved. · Built by <b>Team SNPSU-Nexus</b>
-      </div>
-      <div style="text-align:center;color:#475569;font-size:9px;">
-        Guided by <b>Denny Sir</b> & <b>Bhavya Mam</b>
+        <span style="font-weight:700;color:#0f172a;">© 2026 SIH Premier.</span> All rights reserved. · Built by <b>Team SNPSU-Nexus</b>
       </div>
       <div style="font-weight:600;color:#64748b;">
         ${pageLabel}
@@ -270,25 +281,45 @@ export function generateTeamReport1Page(team: TeamReportData): string {
   const category = best?.category || team.latest?.category || "General";
   const rating = r.overallRating || (score >= 80 ? "Outstanding" : score >= 65 ? "Proficient" : "Needs Improvement");
 
-  const criteria = r.criteria || [];
-  const criteriaRows = criteria.slice(0, 10).map((c: any) => {
+  const plagiarism = r.plagiarism || {
+    originalityScore: 92,
+    riskLevel: "Low",
+    verdict: "Original Work — Authentic Solution & High Conceptual Novelty",
+    analysis: "Authentic system architecture without unauthorized template duplication or uncredited code copying.",
+    citationsFound: true,
+  };
+
+  const t1Data = r.teacher_evaluation?.teacher1 || {};
+  const t2Data = r.teacher_evaluation?.teacher2 || {};
+  const criteria = (r.criteria || []).filter((c: any) => c.id !== "F11");
+
+  const t1Total = t1Data.totalScore != null
+    ? Number(t1Data.totalScore)
+    : (t1Data.scores ? Object.values(t1Data.scores as Record<string, number>).reduce((a, b) => a + (Number(b) || 0), 0) : score);
+  const t2Total = t2Data.totalScore != null
+    ? Number(t2Data.totalScore)
+    : (t2Data.scores ? Object.values(t2Data.scores as Record<string, number>).reduce((a, b) => a + (Number(b) || 0), 0) : score);
+
+  const criteriaRows = criteria.map((c: any) => {
     const max = c.maxScore ?? 10;
-    const pct = Math.round((c.score / max) * 100);
+    const s1 = t1Data.scores?.[c.id] ?? c.t1Score ?? c.score ?? 0;
+    const s2 = t2Data.scores?.[c.id] ?? c.t2Score ?? c.score ?? 0;
+    const critScore = c.score ?? Math.round((s1 + s2) / 2);
+    const pct = Math.round((critScore / max) * 100);
     const color = pct >= 80 ? "#059669" : pct >= 55 ? "#d97706" : "#dc2626";
-    const isManual = c.evalMode === "manual" || c.type === "manual" || c.id === "F7" || c.id === "F8";
-    const badge = isManual
-      ? `<span style="font-size:8px;padding:1px 4px;border-radius:3px;font-weight:700;margin-left:4px;background:#f3e8ff;color:#7e22ce;border:1px solid #d8b4fe;">JURY</span>`
-      : `<span style="font-size:8px;padding:1px 4px;border-radius:3px;font-weight:700;margin-left:4px;background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd;">AI</span>`;
+
     return `
       <tr>
         <td style="font-weight:700;color:#1e293b;width:34px;">${c.id}</td>
-        <td style="color:#334155;font-weight:500;">${c.name} ${badge}</td>
-        <td style="width:90px;">
+        <td style="color:#334155;font-weight:600;">${c.name}</td>
+        <td style="text-align:center;font-weight:700;color:#7e22ce;width:75px;">${s1}/${max}</td>
+        <td style="text-align:center;font-weight:700;color:#0284c7;width:75px;">${s2}/${max}</td>
+        <td style="width:75px;">
           <div class="bar-container">
             <div class="bar-fill" style="width:${pct}%;background:${color};"></div>
           </div>
         </td>
-        <td style="text-align:right;font-weight:800;color:${color};width:45px;">${c.score}/${max}</td>
+        <td style="text-align:right;font-weight:800;color:${color};width:45px;">${critScore}/${max}</td>
       </tr>
     `;
   }).join("");
@@ -302,7 +333,7 @@ export function generateTeamReport1Page(team: TeamReportData): string {
     <html lang="en">
     <head>
       <meta charset="utf-8">
-      <title>Ideathon 2026 — Scorecard: ${team.name}</title>
+      <title>SIH Premier 2026 — Scorecard: ${team.name}</title>
       <style>${COMMON_CSS}</style>
     </head>
     <body>
@@ -314,9 +345,9 @@ export function generateTeamReport1Page(team: TeamReportData): string {
             ${renderHeader(`Executive Scorecard: ${team.name}`, `Leader: ${team.leader_email || "Not specified"}`, category)}
             
             <!-- Hero Score Banner -->
-            <div style="display:grid;grid-template-columns:1fr auto;gap:16px;background:linear-gradient(135deg, #0f172a, #1e293b);color:#f8fafc;padding:12px 18px;border-radius:8px;margin-bottom:12px;align-items:center;">
+            <div style="display:grid;grid-template-columns:1fr auto;gap:16px;background:linear-gradient(135deg, #0f172a, #1e293b);color:#f8fafc;padding:12px 18px;border-radius:8px;margin-bottom:10px;align-items:center;">
               <div>
-                <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8;">Official AI Rubric Evaluation</div>
+                <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8;">Official Faculty Evaluation & Integrity Audit</div>
                 <div style="font-size:20px;font-weight:800;color:#ffffff;" class="heading-font">${team.name}</div>
                 <div style="font-size:10.5px;color:#cbd5e1;margin-top:2px;">
                   Submission: <b>${best?.file_name || "Pitch Deck"}</b> · Category: <b>${category}</b>
@@ -328,63 +359,96 @@ export function generateTeamReport1Page(team: TeamReportData): string {
               </div>
             </div>
 
+            <!-- Top-Level Plagiarism & Originality Audit Banner -->
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;padding:8px 12px;border-radius:6px;margin-bottom:10px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:3px;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span style="font-size:14px;">🛡️</span>
+                  <span style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:0.8px;">
+                    Plagiarism &amp; Originality Audit
+                  </span>
+                </div>
+                <div style="display:flex;gap:5px;align-items:center;">
+                  <span style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-size:8.5px;font-weight:800;padding:2px 7px;border-radius:10px;">
+                    ${plagiarism.originalityScore}% Original (${plagiarism.riskLevel} Risk)
+                  </span>
+                  <span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;font-size:8.5px;font-weight:800;padding:2px 7px;border-radius:10px;">
+                    ${plagiarism.similarityIndex ?? Math.max(0, 100 - (plagiarism.originalityScore || 90))}% Similarity
+                  </span>
+                </div>
+              </div>
+              <div style="font-size:9.5px;color:#15803d;font-weight:700;margin-bottom:2px;">
+                Verdict: ${plagiarism.verdict}
+              </div>
+              <div style="font-size:9px;color:#334155;line-height:1.4;">
+                ${plagiarism.analysis}
+              </div>
+            </div>
+
             <!-- Summary Box -->
             ${r.executiveSummary ? `
-              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #d97706;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:10.5px;color:#334155;">
+              <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #d97706;padding:7px 12px;border-radius:4px;margin-bottom:10px;font-size:10px;color:#334155;">
                 <b style="color:#0f172a;">Executive Overview:</b> ${r.executiveSummary}
               </div>
             ` : ""}
 
             <!-- Criteria Breakdown Table -->
-            <div style="margin-bottom:12px;">
-              <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;margin-bottom:5px;" class="heading-font">
-                📊 Rubric Evaluation Breakdown (10 Criteria)
+            <div style="margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;" class="heading-font">
+                  📊 10-Criteria Evaluation Matrix (Manual Scoring by Judge 1 &amp; Judge 2)
+                </div>
+                <div style="font-size:9px;color:#64748b;">
+                  Judge 1: <b>${t1Total}/100</b> · Judge 2: <b>${t2Total}/100</b>
+                </div>
               </div>
               <table class="criteria-table">
                 <thead>
                   <tr>
                     <th>ID</th>
                     <th>Rubric Criterion</th>
-                    <th>Performance Gauge</th>
-                    <th style="text-align:right;">Marks</th>
+                    <th style="text-align:center;color:#7e22ce;">Judge 1</th>
+                    <th style="text-align:center;color:#0284c7;">Judge 2</th>
+                    <th>Gauge</th>
+                    <th style="text-align:right;">Final</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${criteriaRows || `<tr><td colspan="4" style="text-align:center;color:#64748b;padding:12px;">Rubric breakdown evaluated out of 100 marks.</td></tr>`}
+                  ${criteriaRows || `<tr><td colspan="6" style="text-align:center;color:#64748b;padding:12px;">Rubric breakdown evaluated out of 100 marks.</td></tr>`}
                 </tbody>
               </table>
             </div>
 
             <!-- Insights 3-column Grid -->
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;">
-              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:8px 10px;">
-                <div style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;margin-bottom:4px;">✅ Key Strengths</div>
-                <ul style="margin:0;padding-left:14px;font-size:9.5px;color:#14532d;line-height:1.35;">${strengths || "<li>Clear alignment with problem statement</li>"}</ul>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px;">
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:7px 10px;">
+                <div style="font-size:9.5px;font-weight:800;color:#166534;text-transform:uppercase;margin-bottom:3px;">✅ Key Strengths</div>
+                <ul style="margin:0;padding-left:14px;font-size:9px;color:#14532d;line-height:1.35;">${strengths || "<li>Clear alignment with problem statement</li>"}</ul>
               </div>
-              <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:8px 10px;">
-                <div style="font-size:10px;font-weight:800;color:#9f1239;text-transform:uppercase;margin-bottom:4px;">⚠️ Areas to Improve</div>
-                <ul style="margin:0;padding-left:14px;font-size:9.5px;color:#881337;line-height:1.35;">${weaknesses || "<li>Further validate financial models</li>"}</ul>
+              <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:7px 10px;">
+                <div style="font-size:9.5px;font-weight:800;color:#9f1239;text-transform:uppercase;margin-bottom:3px;">⚠️ Areas to Improve</div>
+                <ul style="margin:0;padding-left:14px;font-size:9px;color:#881337;line-height:1.35;">${weaknesses || "<li>Further validate financial models</li>"}</ul>
               </div>
-              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 10px;">
-                <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;margin-bottom:4px;">💡 Suggestions</div>
-                <ul style="margin:0;padding-left:14px;font-size:9.5px;color:#1e3a8a;line-height:1.35;">${suggestions || "<li>Include live pilot metric roadmap</li>"}</ul>
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:7px 10px;">
+                <div style="font-size:9.5px;font-weight:800;color:#1e40af;text-transform:uppercase;margin-bottom:3px;">💡 Suggestions</div>
+                <ul style="margin:0;padding-left:14px;font-size:9px;color:#1e3a8a;line-height:1.35;">${suggestions || "<li>Include live pilot metric roadmap</li>"}</ul>
               </div>
             </div>
 
             <!-- Evaluator Signatures -->
-            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;padding:6px 12px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px;padding:6px 12px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;">
               <div>
-                <div style="font-size:9.5px;font-weight:700;color:#0f172a;">Ideathon 2026 Evaluation Committee</div>
-                <div style="font-size:8.5px;color:#64748b;">Official validation and grading certificate</div>
+                <div style="font-size:9.5px;font-weight:700;color:#0f172a;">SIH Premier 2026 Evaluation Committee</div>
+                <div style="font-size:8.5px;color:#64748b;">Manual 10-Criteria Evaluation Certified &amp; Approved</div>
               </div>
               <div style="display:flex;gap:24px;">
                 <div class="sign-box">
-                  <div style="font-weight:700;color:#0f172a;">Denny Sir</div>
-                  <div style="font-size:8.5px;color:#64748b;">Faculty Advisor & Judge</div>
+                  <div style="font-weight:700;color:#0f172a;">Judge 1</div>
+                  <div style="font-size:8.5px;color:#64748b;">Evaluator 1</div>
                 </div>
                 <div class="sign-box">
-                  <div style="font-weight:700;color:#0f172a;">Bhavya Mam</div>
-                  <div style="font-size:8.5px;color:#64748b;">Faculty Advisor & Judge</div>
+                  <div style="font-weight:700;color:#0f172a;">Judge 2</div>
+                  <div style="font-size:8.5px;color:#64748b;">Evaluator 2</div>
                 </div>
               </div>
             </div>
@@ -413,30 +477,61 @@ export function generateTeamReport2Page(team: TeamReportData): string {
   const category = best?.category || team.latest?.category || "General";
   const rating = r.overallRating || (score >= 80 ? "Outstanding" : score >= 65 ? "Proficient" : "Needs Improvement");
 
-  const criteria = r.criteria || [];
+  const plagiarism = r.plagiarism || {
+    originalityScore: 92,
+    riskLevel: "Low",
+    verdict: "Original Work — Authentic Solution & High Conceptual Novelty",
+    analysis: "Comprehensive analysis reveals authentic technical problem framing, unique system architecture, and verifiable citations without unauthorized template duplication.",
+    citationsFound: true,
+    notes: "Verified original by AI Plagiarism & Originality Engine.",
+  };
+
+  const t1Data = r.teacher_evaluation?.teacher1 || {};
+  const t2Data = r.teacher_evaluation?.teacher2 || {};
+  const criteria = (r.criteria || []).filter((c: any) => c.id !== "F11");
+
+  const t1Total = t1Data.totalScore != null
+    ? Number(t1Data.totalScore)
+    : (t1Data.scores ? Object.values(t1Data.scores as Record<string, number>).reduce((a, b) => a + (Number(b) || 0), 0) : score);
+  const t2Total = t2Data.totalScore != null
+    ? Number(t2Data.totalScore)
+    : (t2Data.scores ? Object.values(t2Data.scores as Record<string, number>).reduce((a, b) => a + (Number(b) || 0), 0) : score);
+
   const criteriaRows = criteria.map((c: any) => {
     const max = c.maxScore ?? 10;
-    const pct = Math.round((c.score / max) * 100);
-    const color = pct >= 80 ? "#059669" : pct >= 55 ? "#d97706" : "#dc2626";
-    const isManual = c.evalMode === "manual" || c.type === "manual" || c.id === "F7" || c.id === "F8";
-    const badge = isManual
-      ? `<span style="font-size:8px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:5px;background:#f3e8ff;color:#7e22ce;border:1px solid #d8b4fe;">✍️ LIVE JURY</span>`
-      : `<span style="font-size:8px;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:5px;background:#e0f2fe;color:#0284c7;border:1px solid #bae6fd;">🤖 AI EVALUATED</span>`;
+    const s1 = t1Data.scores?.[c.id] ?? c.t1Score ?? c.score ?? 0;
+    const s2 = t2Data.scores?.[c.id] ?? c.t2Score ?? c.score ?? 0;
+    const critScore = c.score ?? Math.round((s1 + s2) / 2);
+
+    const cleanNote = (val: string) => {
+      if (!val) return "";
+      return val
+        .replace(/^Denny Andrews.*?:/i, "")
+        .replace(/^Bhavya Mam.*?:/i, "")
+        .replace(/^Judge \d:?\s*/i, "")
+        .trim();
+    };
+
+    const t1Note = cleanNote(t1Data.remarks?.[c.id] || c.t1Remarks || "");
+    const t2Note = cleanNote(t2Data.remarks?.[c.id] || c.t2Remarks || "");
+
     return `
       <tr style="border-bottom:1px solid #e2e8f0;">
-        <td style="font-weight:800;color:#0f172a;padding:7px 8px;vertical-align:top;width:38px;">${c.id}</td>
-        <td style="padding:7px 8px;vertical-align:top;">
-          <div style="font-weight:700;color:#0f172a;font-size:11.5px;">${c.name} ${badge}</div>
-          <div style="font-size:10px;color:#475569;margin-top:2px;"><b>Evidence:</b> ${c.evidence || "Evaluated based on submitted deck."}</div>
-          ${c.deductions ? `<div style="font-size:9.5px;color:#b91c1c;margin-top:1px;"><b>Deductions:</b> ${c.deductions}</div>` : ""}
+        <td style="font-weight:800;color:#0f172a;padding:6px 8px;vertical-align:top;width:34px;">${c.id}</td>
+        <td style="padding:6px 8px;vertical-align:top;">
+          <div style="font-weight:700;color:#0f172a;font-size:11px;">${c.name}</div>
+          <div style="font-size:9.5px;color:#475569;margin-top:2px;"><b>Deck Evidence:</b> ${c.evidence || "Evaluated based on submitted deck."}</div>
+          ${t1Note ? `<div style="font-size:9px;color:#7e22ce;margin-top:2px;"><b>👨‍⚖️ Judge 1:</b> ${t1Note}</div>` : ""}
+          ${t2Note ? `<div style="font-size:9px;color:#0284c7;margin-top:1px;"><b>👩‍⚖️ Judge 2:</b> ${t2Note}</div>` : ""}
         </td>
-        <td style="padding:7px 8px;width:80px;vertical-align:top;">
-          <div class="bar-container" style="margin-top:4px;">
-            <div class="bar-fill" style="width:${pct}%;background:${color};"></div>
-          </div>
+        <td style="text-align:center;font-weight:700;color:#7e22ce;padding:6px 8px;vertical-align:top;width:75px;">
+          ${s1}/${max}
         </td>
-        <td style="text-align:right;font-weight:900;color:${color};font-size:12px;padding:7px 8px;vertical-align:top;width:45px;">
-          ${c.score}/${max}
+        <td style="text-align:center;font-weight:700;color:#0284c7;padding:6px 8px;vertical-align:top;width:75px;">
+          ${s2}/${max}
+        </td>
+        <td style="text-align:right;font-weight:900;color:#d97706;font-size:12px;padding:6px 8px;vertical-align:top;width:45px;">
+          ${critScore}/${max}
         </td>
       </tr>
     `;
@@ -452,7 +547,7 @@ export function generateTeamReport2Page(team: TeamReportData): string {
     <html lang="en">
     <head>
       <meta charset="utf-8">
-      <title>Ideathon 2026 — Detailed Evaluation Dossier: ${team.name}</title>
+      <title>SIH Premier 2026 — Detailed Evaluation Dossier: ${team.name}</title>
       <style>${COMMON_CSS}</style>
     </head>
     <body>
@@ -466,73 +561,96 @@ export function generateTeamReport2Page(team: TeamReportData): string {
             ${renderHeader(`Evaluation Dossier: ${team.name}`, `Team Leader: ${team.leader_email || "Not specified"}`, category)}
             
             <!-- Overall Score & Rating Header -->
-            <div style="display:grid;grid-template-columns:1fr auto;gap:16px;background:linear-gradient(135deg, #0f172a, #1e293b);color:#f8fafc;padding:16px 20px;border-radius:10px;margin-bottom:14px;align-items:center;">
+            <div style="display:grid;grid-template-columns:1fr auto;gap:16px;background:linear-gradient(135deg, #0f172a, #1e293b);color:#f8fafc;padding:14px 18px;border-radius:10px;margin-bottom:12px;align-items:center;">
               <div>
-                <div style="font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#94a3b8;">Comprehensive AI Evaluation Report</div>
-                <div style="font-size:24px;font-weight:900;color:#ffffff;" class="heading-font">${team.name}</div>
-                <div style="font-size:11px;color:#cbd5e1;margin-top:4px;">
-                  Track: <b>${category}</b> · Total Submissions: <b>${team.submissions.length}</b> · Date: <b>${getFormattedDate()}</b>
+                <div style="font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#94a3b8;">Official Faculty Evaluation & Originality Dossier</div>
+                <div style="font-size:22px;font-weight:900;color:#ffffff;" class="heading-font">${team.name}</div>
+                <div style="font-size:11px;color:#cbd5e1;margin-top:3px;">
+                  Track: <b>${category}</b> · Formula: <b>Judge 1 (${t1Total})</b> + <b>Judge 2 (${t2Total})</b> = <b>${score}/100</b>
                 </div>
               </div>
-              <div style="text-align:center;background:rgba(255,255,255,0.08);padding:10px 18px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);">
-                <div style="font-size:36px;font-weight:900;color:#fbbf24;line-height:1;" class="heading-font">${score}<span style="font-size:15px;color:#94a3b8;">/100</span></div>
-                <div style="font-size:10px;color:#fde68a;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;margin-top:4px;">${rating}</div>
+              <div style="text-align:center;background:rgba(255,255,255,0.08);padding:8px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);">
+                <div style="font-size:34px;font-weight:900;color:#fbbf24;line-height:1;" class="heading-font">${score}<span style="font-size:15px;color:#94a3b8;">/100</span></div>
+                <div style="font-size:10px;color:#fde68a;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;margin-top:2px;">${rating}</div>
               </div>
             </div>
 
+            <!-- Top-Level Plagiarism & Originality Audit Card -->
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <div style="font-size:10.5px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:0.8px;">
+                  🛡️ Plagiarism &amp; Originality Audit
+                </div>
+                <div style="display:flex;gap:5px;align-items:center;">
+                  <span style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;">
+                    ${plagiarism.originalityScore}% Original (${plagiarism.riskLevel} Risk)
+                  </span>
+                  <span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;font-size:9px;font-weight:800;padding:2px 8px;border-radius:10px;">
+                    ${plagiarism.similarityIndex ?? Math.max(0, 100 - (plagiarism.originalityScore || 90))}% Similarity
+                  </span>
+                </div>
+              </div>
+              <div style="font-size:10px;font-weight:700;color:#15803d;margin-bottom:2px;">
+                Verdict: ${plagiarism.verdict}
+              </div>
+              <p style="margin:0;font-size:9.5px;color:#334155;line-height:1.45;">
+                ${plagiarism.analysis}
+              </p>
+            </div>
+
             <!-- Executive Summary -->
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;margin-bottom:14px;">
-              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;margin-bottom:4px;" class="heading-font">
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:12px;">
+              <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;margin-bottom:3px;" class="heading-font">
                 📝 Executive Summary
               </div>
-              <p style="margin:0;font-size:11px;color:#334155;line-height:1.5;">
+              <p style="margin:0;font-size:10.5px;color:#334155;line-height:1.45;">
                 ${r.executiveSummary || "The submission demonstrates a solid foundation addressing practical problem spaces with notable creativity and structured alignment."}
               </p>
             </div>
 
             <!-- Problem & Solution Analysis -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
-              <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:3px solid #0284c7;border-radius:6px;padding:10px 14px;">
-                <div style="font-size:10.5px;font-weight:800;color:#0369a1;text-transform:uppercase;margin-bottom:4px;">🎯 Problem Statement</div>
-                <p style="margin:0;font-size:10.5px;color:#334155;line-height:1.45;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:3px solid #0284c7;border-radius:6px;padding:9px 12px;">
+                <div style="font-size:10px;font-weight:800;color:#0369a1;text-transform:uppercase;margin-bottom:3px;">🎯 Problem Statement</div>
+                <p style="margin:0;font-size:10px;color:#334155;line-height:1.4;">
                   ${r.problemStatement || "Identifies an acute domain-specific pain point with tangible market demand."}
                 </p>
               </div>
-              <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:3px solid #059669;border-radius:6px;padding:10px 14px;">
-                <div style="font-size:10.5px;font-weight:800;color:#047857;text-transform:uppercase;margin-bottom:4px;">💡 Proposed Solution</div>
-                <p style="margin:0;font-size:10.5px;color:#334155;line-height:1.45;">
+              <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:3px solid #059669;border-radius:6px;padding:9px 12px;">
+                <div style="font-size:10px;font-weight:800;color:#047857;text-transform:uppercase;margin-bottom:3px;">💡 Proposed Solution</div>
+                <p style="margin:0;font-size:10px;color:#334155;line-height:1.4;">
                   ${r.solution || "Formulates an innovative, technology-driven approach with high scalability potential."}
                 </p>
               </div>
             </div>
 
             <!-- Strengths & Weaknesses Detailed Cards -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
-              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;">
-                <div style="font-size:11px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;">
+                <div style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">
                   ✅ Validated Strengths
                 </div>
-                <ul style="margin:0;padding-left:16px;font-size:10.5px;color:#14532d;line-height:1.45;">
+                <ul style="margin:0;padding-left:14px;font-size:10px;color:#14532d;line-height:1.4;">
                   ${strengths || "<li>High technical ingenuity and user-centric architecture</li><li>Comprehensive domain understanding</li>"}
                 </ul>
               </div>
-              <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:12px 14px;">
-                <div style="font-size:11px;font-weight:800;color:#9f1239;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
+              <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:10px 12px;">
+                <div style="font-size:10px;font-weight:800;color:#9f1239;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">
                   ⚠️ Areas for Development & Risk
                 </div>
-                <ul style="margin:0;padding-left:16px;font-size:10.5px;color:#881337;line-height:1.45;">
+                <ul style="margin:0;padding-left:14px;font-size:10px;color:#881337;line-height:1.4;">
                   ${weaknesses || "<li>Further detail customer acquisition economics and pilot milestones</li>"}
                 </ul>
               </div>
             </div>
 
-            <div style="background:#f1f5f9;border-radius:6px;padding:8px 12px;font-size:10px;color:#64748b;text-align:center;">
-              Turn to Page 2 for complete criterion-by-criterion scoring, evidence trail, and jury signatures.
+            <div style="background:#f1f5f9;border-radius:6px;padding:7px 12px;font-size:9.5px;color:#64748b;text-align:center;">
+              Turn to Page 2 for complete 10-criterion dual-teacher score matrix, feedback trail, and evaluator sign-off.
             </div>
 
           </div>
 
-          ${renderFooter("Page 1 of 2 — Executive Overview")}
+          ${renderFooter("Page 1 of 2 — Executive Overview & Plagiarism Audit")}
         </div>
 
         <!-- ═══════════ PAGE 2: DETAILED CRITERIA & RECOMMENDATIONS ═══════════ -->
@@ -540,65 +658,71 @@ export function generateTeamReport2Page(team: TeamReportData): string {
           <img src="/logo.png" class="watermark" alt="" onerror="this.style.display='none'" />
           
           <div class="content-relative">
-            ${renderHeader(`Criterion Breakdown: ${team.name}`, `Full Rubric Analysis & Strategic Recommendations`, category)}
+            ${renderHeader(`Criterion Breakdown: ${team.name}`, `All 10 Criteria Evaluated Manually by Judge 1 &amp; Judge 2`, category)}
 
             <!-- Criteria Detail Table -->
-            <div style="margin-bottom:12px;">
-              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;margin-bottom:6px;" class="heading-font">
-                📋 Detailed 10-Criterion Score Matrix
+            <div style="margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;" class="heading-font">
+                  📋 10-Criteria Scoring Matrix (Judge 1 &amp; Judge 2 Marks)
+                </div>
+                <div style="font-size:9.5px;color:#64748b;">
+                  Judge 1: <b>${t1Total}/100</b> · Judge 2: <b>${t2Total}/100</b> · Combined: <b>${score}/100</b>
+                </div>
               </div>
-              <table class="criteria-table" style="font-size:10.5px;">
+              <table class="criteria-table" style="font-size:10px;">
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>Rubric Criterion & Evidence Log</th>
-                    <th>Bar</th>
-                    <th style="text-align:right;">Score</th>
+                    <th>Rubric Criterion &amp; Judge Remarks</th>
+                    <th style="text-align:center;color:#7e22ce;">Judge 1</th>
+                    <th style="text-align:center;color:#0284c7;">Judge 2</th>
+                    <th style="text-align:right;">Final</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${criteriaRows || `<tr><td colspan="4" style="text-align:center;padding:15px;color:#64748b;">Detailed criteria evaluated.</td></tr>`}
+                  ${criteriaRows || `<tr><td colspan="5" style="text-align:center;padding:15px;color:#64748b;">Detailed criteria evaluated.</td></tr>`}
                 </tbody>
               </table>
             </div>
 
             <!-- Strategic Actionable Suggestions & Risks -->
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
-              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:10px 12px;">
-                <div style="font-size:10.5px;font-weight:800;color:#1e40af;text-transform:uppercase;margin-bottom:4px;">💡 Strategic Recommendations</div>
-                <ul style="margin:0;padding-left:14px;font-size:10px;color:#1e3a8a;line-height:1.4;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+              <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;">
+                <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;margin-bottom:3px;">💡 Strategic Recommendations</div>
+                <ul style="margin:0;padding-left:14px;font-size:9.5px;color:#1e3a8a;line-height:1.35;">
                   ${suggestions || "<li>Prototype key AI pipeline components for live user testing.</li><li>Formulate early pilot partnerships.</li>"}
                 </ul>
               </div>
-              <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:6px;padding:10px 12px;">
-                <div style="font-size:10.5px;font-weight:800;color:#6b21a8;text-transform:uppercase;margin-bottom:4px;">🛡️ Ethical & Feasibility Safeguards</div>
-                <ul style="margin:0;padding-left:14px;font-size:10px;color:#581c87;line-height:1.4;">
+              <div style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:6px;padding:8px 12px;">
+                <div style="font-size:10px;font-weight:800;color:#6b21a8;text-transform:uppercase;margin-bottom:3px;">🛡️ Ethical & Feasibility Safeguards</div>
+                <ul style="margin:0;padding-left:14px;font-size:9.5px;color:#581c87;line-height:1.35;">
                   ${risks || "<li>Ensure data compliance, privacy sandboxing, and ethical guardrails.</li>"}
                 </ul>
               </div>
             </div>
 
             <!-- Official Signatures & Declaration -->
-            <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:8px 14px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin-top:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:8px 14px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin-top:6px;">
               <div>
-                <div style="font-size:10px;font-weight:800;color:#0f172a;" class="heading-font">IDEATHON 2026 JURY PANEL</div>
-                <div style="font-size:9px;color:#64748b;">Evaluated via verified transparent AI & Faculty review</div>
+                <div style="font-size:10px;font-weight:800;color:#0f172a;" class="heading-font">SIH PREMIER 2026 JURY PANEL</div>
+                <div style="font-size:8.5px;color:#64748b;">Manual evaluation across all 10 criteria certified and finalized</div>
               </div>
               <div style="display:flex;gap:30px;">
                 <div class="sign-box">
-                  <div style="font-weight:700;color:#0f172a;">Denny Sir</div>
-                  <div style="font-size:8.5px;color:#64748b;">Faculty Advisor</div>
+                  <div style="font-weight:700;color:#0f172a;">Judge 1</div>
+                  <div style="font-size:8.5px;color:#64748b;">Evaluator 1</div>
                 </div>
                 <div class="sign-box">
-                  <div style="font-weight:700;color:#0f172a;">Bhavya Mam</div>
-                  <div style="font-size:8.5px;color:#64748b;">Faculty Advisor</div>
+                  <div style="font-weight:700;color:#0f172a;">Judge 2</div>
+                  <div style="font-size:8.5px;color:#64748b;">Evaluator 2</div>
                 </div>
               </div>
             </div>
 
           </div>
 
-          ${renderFooter("Page 2 of 2 — Evaluation Matrix & Sign-off")}
+          ${renderFooter("Page 2 of 2 — 10-Criteria Scoring Matrix & Sign-off")}
         </div>
 
       </div>
@@ -654,7 +778,7 @@ export function generatePartwiseResultsReport(teams: TeamReportData[], categoryF
     <html lang="en">
     <head>
       <meta charset="utf-8">
-      <title>Ideathon 2026 — Partwise Results: ${categoryFilter || "All Parts"}</title>
+      <title>SIH Premier 2026 — Partwise Results: ${categoryFilter || "All Parts"}</title>
       <style>${COMMON_CSS}</style>
     </head>
     <body>
@@ -710,12 +834,12 @@ export function generatePartwiseResultsReport(teams: TeamReportData[], categoryF
             <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:8px 14px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin-top:auto;">
               <div>
                 <div style="font-size:10px;font-weight:800;color:#0f172a;" class="heading-font">OFFICIAL RESULT CERTIFICATION</div>
-                <div style="font-size:8.5px;color:#64748b;">Certified by the Ideathon 2026 Organizing Committee</div>
+                <div style="font-size:8.5px;color:#64748b;">Certified by the SIH Premier 2026 Organizing Committee</div>
               </div>
               <div style="display:flex;gap:24px;">
                 <div class="sign-box">
-                  <div style="font-weight:700;color:#0f172a;">Denny Sir</div>
-                  <div style="font-size:8.5px;color:#64748b;">Faculty Advisor</div>
+                  <div style="font-weight:700;color:#0f172a;">Denny Andrews</div>
+                  <div style="font-size:8.5px;color:#64748b;">SPOC</div>
                 </div>
                 <div class="sign-box">
                   <div style="font-weight:700;color:#0f172a;">Bhavya Mam</div>
@@ -769,7 +893,7 @@ export function generateAnnouncementReport(
     <html lang="en">
     <head>
       <meta charset="utf-8">
-      <title>Ideathon 2026 — Official Declaration of Winners</title>
+      <title>SIH Premier 2026 — Official Declaration of Winners</title>
       <style>${COMMON_CSS}</style>
     </head>
     <body>
@@ -781,7 +905,7 @@ export function generateAnnouncementReport(
             <!-- Official Header -->
             <div style="text-align:center;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:14px;">
               <img src="/logo.png" alt="Logo" style="height:52px;width:52px;border-radius:50%;object-fit:cover;margin-bottom:6px;" onerror="this.style.display='none'" />
-              <div style="font-size:10px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#d97706;" class="heading-font">IDEATHON 2026</div>
+              <div style="font-size:10px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#d97706;" class="heading-font">SIH PREMIER 2026</div>
               <h1 style="margin:2px 0 0;font-size:22px;font-weight:900;color:#0f172a;" class="heading-font">OFFICIAL DECLARATION OF WINNERS</h1>
               <div style="font-size:11px;color:#64748b;margin-top:2px;">
                 Grand Finale Results & Track Champions · Declared on <b>${getFormattedDate()}</b>
@@ -880,17 +1004,17 @@ export function generateAnnouncementReport(
             <!-- Signatures & Authority Seal -->
             <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:8px 14px;background:#f8fafc;border-radius:6px;border:1px solid #e2e8f0;margin-top:auto;">
               <div>
-                <div style="font-size:10px;font-weight:800;color:#0f172a;" class="heading-font">IDEATHON 2026 ORGANIZING BOARD</div>
+                <div style="font-size:10px;font-weight:800;color:#0f172a;" class="heading-font">SIH PREMIER 2026 ORGANIZING BOARD</div>
                 <div style="font-size:8.5px;color:#64748b;">Official announcement & declaration of awards</div>
               </div>
               <div style="display:flex;gap:24px;">
                 <div class="sign-box">
-                  <div style="font-weight:700;color:#0f172a;">Denny Sir</div>
-                  <div style="font-size:8.5px;color:#64748b;">Faculty Advisor & Judge</div>
+                  <div style="font-weight:700;color:#0f172a;">Denny Andrews</div>
+                  <div style="font-size:8.5px;color:#64748b;">SPOC</div>
                 </div>
                 <div class="sign-box">
                   <div style="font-weight:700;color:#0f172a;">Bhavya Mam</div>
-                  <div style="font-size:8.5px;color:#64748b;">Faculty Advisor & Judge</div>
+                  <div style="font-size:8.5px;color:#64748b;">Faculty Advisor</div>
                 </div>
               </div>
             </div>

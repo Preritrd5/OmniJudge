@@ -1,4 +1,4 @@
-# Ideathon 2026 — Submission & Evaluation Platform
+# SIH Premier 2026 — Submission & Evaluation Platform
 
 A full-stack web application for running idea-pitching hackathons. Teams submit a PDF pitch; an AI panel scores it against a transparent 10-criterion rubric — every mark backed by evidence, every deduction explained.
 
@@ -8,7 +8,7 @@ A full-stack web application for running idea-pitching hackathons. Teams submit 
 
 ### For Teams
 - Browse registered teams and select yours in a single click
-- Drag-and-drop (or click-to-browse) PDF upload — 15 MB max
+- Drag-and-drop (or click-to-browse) PDF upload — less than 3 MB
 - Instant success confirmation once the submission is queued for evaluation
 
 ### For Admins

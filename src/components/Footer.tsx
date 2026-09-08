@@ -40,8 +40,8 @@ export function Footer({ className = "", showLogo = true }: FooterProps) {
                 D
               </span>
               <div className="text-left">
-                <div className="text-xs font-bold text-slate-100">Denny Sir</div>
-                <div className="text-[9px] text-slate-400 uppercase tracking-wider">Faculty Mentor &amp; Judge</div>
+                <div className="text-xs font-bold text-slate-100">Denny Andrews</div>
+                <div className="text-[9px] text-amber-300/90 font-semibold uppercase tracking-wider">SPOC</div>
               </div>
             </div>
 
@@ -67,7 +67,7 @@ export function Footer({ className = "", showLogo = true }: FooterProps) {
       {/* Copyright Line */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-x-3 gap-y-1 text-xs text-slate-400 pt-1">
         <span className="font-semibold text-slate-300">
-          © 2026 Ideathon · INNOVEDGE Club. All rights reserved.
+          © 2026 SIH Premier · INNOVEDGE Club. All rights reserved.
         </span>
         <span className="hidden sm:inline text-slate-600">·</span>
         <span className="text-[11px] text-slate-500 uppercase tracking-widest">

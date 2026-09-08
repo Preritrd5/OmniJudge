@@ -1,26 +1,74 @@
 {
   "version": 1,
-  "updatedAt": "2026-09-04T11:53:54.347Z",
+  "updatedAt": "2026-09-07T05:30:00.000Z",
   "topics": [
     {
       "id": "T1",
-      "name": "AI & Machine Learning"
+      "name": "Agriculture, FoodTech & Rural Development"
     },
     {
       "id": "T2",
-      "name": "FinTech & Web3"
+      "name": "Blockchain & Cybersecurity"
     },
     {
       "id": "T3",
-      "name": "EdTech & Learning"
+      "name": "Clean & Green Technology"
     },
     {
       "id": "T4",
-      "name": "Healthcare & MedTech"
+      "name": "Disaster Management"
     },
     {
       "id": "T5",
-      "name": "Sustainability & GreenTech"
+      "name": "Fitness & Sports"
+    },
+    {
+      "id": "T6",
+      "name": "Heritage & Culture"
+    },
+    {
+      "id": "T7",
+      "name": "MedTech / BioTech / HealthTech"
+    },
+    {
+      "id": "T8",
+      "name": "Miscellaneous"
+    },
+    {
+      "id": "T9",
+      "name": "Renewable / Sustainable Energy"
+    },
+    {
+      "id": "T10",
+      "name": "Robotics and Drones"
+    },
+    {
+      "id": "T11",
+      "name": "Smart Automation"
+    },
+    {
+      "id": "T12",
+      "name": "Smart Education"
+    },
+    {
+      "id": "T13",
+      "name": "Smart Vehicles"
+    },
+    {
+      "id": "T14",
+      "name": "Space Technology"
+    },
+    {
+      "id": "T15",
+      "name": "Toys & Games"
+    },
+    {
+      "id": "T16",
+      "name": "Transportation & Logistics"
+    },
+    {
+      "id": "T17",
+      "name": "Travel & Tourism"
     }
   ]
 }
