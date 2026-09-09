@@ -395,12 +395,12 @@ function TeamPortal() {
           </div>
         </Link>
         <div className="flex items-center gap-3">
-          <Link
+          {/* <Link
             to="/auth"
             className="rounded-lg border border-purple-400/30 bg-purple-950/40 px-3 py-1.5 text-xs font-semibold text-purple-200 hover:bg-purple-900/50 transition"
           >
             👑 Admin Login
-          </Link>
+          </Link> */}
           <ThemeToggle />
 
           {/* {sessionEmail && (

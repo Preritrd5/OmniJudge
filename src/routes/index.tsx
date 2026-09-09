@@ -50,9 +50,9 @@ function Landing() {
           <Link to="/team" className="rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-amber-300 hover:bg-amber-300/20 transition">
             Sign In
           </Link>
-          <Link to="/auth" className="rounded-full border border-purple-400/30 bg-purple-950/40 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-purple-200 hover:bg-purple-900/40 transition">
+          {/* <Link to="/auth" className="rounded-full border border-purple-400/30 bg-purple-950/40 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-purple-200 hover:bg-purple-900/40 transition">
             👑 Admin Login
-          </Link>
+          </Link> */}
           <ThemeToggle />
         </nav>
       </header>
@@ -80,12 +80,12 @@ function Landing() {
               Sign In to Submit
               <span className="transition-transform group-hover:translate-x-1">→</span>
             </Link>
-            <Link
+            {/* <Link
               to="/auth"
               className="inline-flex items-center gap-2 rounded-full chrome-glass border border-purple-400/30 bg-purple-950/20 px-6 py-3.5 text-sm font-semibold text-purple-200 transition hover:bg-purple-900/30 card-3d card-3d-hover"
             >
               👑 Admin Login
-            </Link>
+            </Link> */}
           </div>
         </div>
 
