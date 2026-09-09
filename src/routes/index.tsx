@@ -115,13 +115,6 @@ function Landing() {
             blurb="Sign in with your team leader credentials, register members, select your track, and upload your pitch PDF under 3 MB."
             tone="cyan"
           />
-          <PortalCard
-            to="/auth"
-            tag="For Admins & Judges"
-            title="Admin Login"
-            blurb="Sign in to the Admin Control Center to manage submissions, conduct manual scoring with Judge 1 & Judge 2, and generate certified PDF dossiers."
-            tone="violet"
-          />
         </div>
 
         {/* Marquee of capabilities */}
