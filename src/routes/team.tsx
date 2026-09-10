@@ -17,11 +17,11 @@ import {
   getStudentAnnouncements,
 } from "@/lib/admin.functions";
 import {
-  broadcastTeamAuthChange,
-  subscribeAuthSync,
-  getTeamSessionFromStorage,
-  clearTeamSessionStorage,
-} from "@/lib/auth-sync";
+  getTeamTabSession,
+  setTeamTabSession,
+  clearTeamTabSession,
+  purgeLegacyLocalStorage,
+} from "@/lib/team-session";
 
 export const Route = createFileRoute("/team")({
   head: () => ({
@@ -51,6 +51,7 @@ function TeamPortal() {
 
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const [sessionLeaderName, setSessionLeaderName] = useState<string>("");
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
 
   // Sign In Form State
   const [loginTeamName, setLoginTeamName] = useState("");
@@ -95,11 +96,17 @@ function TeamPortal() {
   const dashboardReqIdRef = useRef(0);
   const notifReqIdRef = useRef(0);
 
-  const loadNotifications = async (teamId: string) => {
+  const loadNotifications = async (teamId: string, token?: string | null) => {
     if (!teamId) return;
     const reqId = ++notifReqIdRef.current;
     try {
-      const res = await getNotificationsFn({ data: { teamId } });
+      const activeToken = token !== undefined ? token : sessionToken;
+      const res = await getNotificationsFn({
+        data: {
+          teamId,
+          sessionToken: activeToken || undefined,
+        },
+      });
       if (reqId === notifReqIdRef.current && res?.notifications) {
         setNotifications(res.notifications);
       }
@@ -127,7 +134,12 @@ function TeamPortal() {
   const handleMarkAllRead = async () => {
     if (!teamData?.id) return;
     try {
-      await markAllNotificationsReadFn({ data: { teamId: teamData.id } });
+      await markAllNotificationsReadFn({
+        data: {
+          teamId: teamData.id,
+          sessionToken: sessionToken || undefined,
+        },
+      });
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch {}
   };
@@ -137,6 +149,7 @@ function TeamPortal() {
     notifReqIdRef.current++;
     setSessionEmail(null);
     setSessionLeaderName("");
+    setSessionToken(null);
     setTeamData(null);
     setNotifications([]);
     setUploadDone(null);
@@ -148,72 +161,32 @@ function TeamPortal() {
   };
 
   useEffect(() => {
+    // Purge any obsolete shared localStorage keys so stale cross-tab data cannot pollute sessions
+    purgeLegacyLocalStorage();
+
     getTopicsFn()
       .then((res) => setTopics(res.topics || []))
       .catch(() => {});
 
     loadAnnouncements();
 
-    const currentSession = getTeamSessionFromStorage();
-    if (currentSession?.email) {
+    // Read session strictly from this tab's sessionStorage
+    const currentSession = getTeamTabSession();
+    if (currentSession?.email && currentSession?.sessionToken) {
       setSessionEmail(currentSession.email);
+      setSessionToken(currentSession.sessionToken);
       if (currentSession.leaderName) setSessionLeaderName(currentSession.leaderName);
-      loadDashboard(currentSession.email, currentSession.teamName || undefined);
-    } else {
-      supabase.auth.getUser().then(({ data }) => {
-        if (data.user?.email) {
-          setSessionEmail(data.user.email);
-          const metaName = (data.user.user_metadata as any)?.leader_name || "";
-          if (metaName) setSessionLeaderName(metaName);
-          loadDashboard(data.user.email);
-        }
-      });
+      loadDashboard(currentSession.email, currentSession.teamName || undefined, currentSession.sessionToken);
     }
 
-    // Subscribe to cross-tab auth synchronization events
-    const unsubscribeAuth = subscribeAuthSync((event) => {
-      if (event.type === "TEAM_AUTH_CHANGED") {
-        if (!event.email) {
-          // Logged out in another tab
-          clearSessionState();
-        } else if (event.email) {
-          // Logged in or switched user/team in another tab
-          const nextEmail = event.email;
-          setSessionEmail((prevEmail) => {
-            if (prevEmail !== nextEmail) {
-              setTeamData(null);
-              setNotifications([]);
-              setUploadDone(null);
-              setFile(null);
-              setActiveSubmittingProposal(null);
-              if (event.leaderName) setSessionLeaderName(event.leaderName);
-              loadDashboard(nextEmail, event.teamName || undefined);
-              return nextEmail;
-            }
-            return prevEmail;
-          });
-        }
-      }
-    });
-
-    // Reconcile when tab becomes visible, receives window focus, or restores from bfcache
+    // Reconcile tab state when tab becomes visible or receives window focus
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === "visible") {
-        const stored = getTeamSessionFromStorage();
+        const stored = getTeamTabSession();
         setSessionEmail((prevEmail) => {
           if (!stored?.email && prevEmail) {
             clearSessionState();
             return null;
-          }
-          if (stored?.email && stored.email !== prevEmail) {
-            setTeamData(null);
-            setNotifications([]);
-            setUploadDone(null);
-            setFile(null);
-            setActiveSubmittingProposal(null);
-            if (stored.leaderName) setSessionLeaderName(stored.leaderName);
-            loadDashboard(stored.email, stored.teamName || undefined);
-            return stored.email;
           }
           return prevEmail;
         });
@@ -231,64 +204,76 @@ function TeamPortal() {
     window.addEventListener("pageshow", handlePageShow);
 
     return () => {
-      unsubscribeAuth();
       document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
       window.removeEventListener("focus", handleVisibilityOrFocus);
       window.removeEventListener("pageshow", handlePageShow);
     };
   }, []);
 
-  // Poll for background status & notification updates every 6 seconds
+  // Poll for background status & notification updates every 6 seconds for THIS tab
   useEffect(() => {
     if (!teamData?.id || !sessionEmail) return;
     const interval = setInterval(() => {
-      // First verify localStorage still matches sessionEmail
-      const currentStored = getTeamSessionFromStorage();
+      // Verify this tab's sessionStorage still matches active session
+      const currentStored = getTeamTabSession();
       if (!currentStored?.email || currentStored.email !== sessionEmail) {
-        // Detected cross-tab session change during poll cycle
         if (!currentStored?.email) {
           clearSessionState();
-        } else {
-          setTeamData(null);
-          setNotifications([]);
-          setUploadDone(null);
-          setFile(null);
-          setActiveSubmittingProposal(null);
-          setSessionEmail(currentStored.email);
-          if (currentStored.leaderName) setSessionLeaderName(currentStored.leaderName);
-          loadDashboard(currentStored.email, currentStored.teamName || undefined);
         }
         return;
       }
 
-      loadNotifications(teamData.id);
+      loadNotifications(teamData.id, currentStored.sessionToken);
       loadAnnouncements();
-      getDashboardFn({ data: { email: sessionEmail, teamName: teamData.name } })
+      getDashboardFn({
+        data: {
+          sessionToken: currentStored.sessionToken,
+          email: sessionEmail,
+          teamName: teamData.name,
+        },
+      })
         .then((res) => {
-          const currentStored = getTeamSessionFromStorage();
-          if (currentStored?.email === sessionEmail && res?.found && res?.team) {
+          const currentStoredNow = getTeamTabSession();
+          if (currentStoredNow?.email === sessionEmail && res?.found && res?.team) {
             setTeamData(res.team);
           }
         })
         .catch(() => {});
     }, 6000);
     return () => clearInterval(interval);
-  }, [teamData?.id, sessionEmail]);
+  }, [teamData?.id, sessionEmail, teamData?.name]);
 
-  const loadDashboard = async (email: string, teamName?: string) => {
+  const loadDashboard = async (email: string, teamName?: string, token?: string | null) => {
     const currentReqId = ++dashboardReqIdRef.current;
     setDashboardLoading(true);
     try {
-      const res = await getDashboardFn({ data: { email, teamName } });
+      const activeToken = token !== undefined ? token : sessionToken;
+      const res = await getDashboardFn({
+        data: {
+          sessionToken: activeToken || undefined,
+          email,
+          teamName,
+        },
+      });
       // Discard stale in-flight response if session changed or was cleared
       if (currentReqId !== dashboardReqIdRef.current) return;
-      const stored = getTeamSessionFromStorage();
+      const stored = getTeamTabSession();
       if (!stored?.email || stored.email !== email) return;
 
       if (res.found && res.team) {
+        if (res.sessionToken) {
+          setSessionToken(res.sessionToken);
+          setTeamTabSession({
+            email,
+            teamName: res.team.name,
+            leaderName: res.team.profile?.leaderName || "",
+            sessionToken: res.sessionToken,
+            teamId: res.team.id,
+          });
+        }
         setTeamData(res.team);
         if (res.team.id) {
-          loadNotifications(res.team.id);
+          loadNotifications(res.team.id, res.sessionToken || activeToken);
         }
         const p = (res.team.profile || {}) as any;
         if (p.leaderName) setSessionLeaderName(p.leaderName);
@@ -335,25 +320,26 @@ function TeamPortal() {
         throw new Error("No registered team found matching this Team Name and Email. Please check your credentials or contact the administrator.");
       }
 
-      localStorage.setItem("sih_leader_email", email);
-      localStorage.setItem("sih_team_name", res.team.name);
       const leaderName = res.team?.profile?.leaderName || "";
-      if (leaderName) {
-        localStorage.setItem("sih_leader_name", leaderName);
-        setSessionLeaderName(leaderName);
-      }
-      setSessionEmail(email);
-      setTeamData(res.team);
+      const token = res.sessionToken || "";
 
-      // Broadcast login to all other open tabs immediately
-      broadcastTeamAuthChange({
+      // Store session strictly in THIS tab's sessionStorage
+      setTeamTabSession({
         email,
         teamName: res.team.name,
-        leaderName: leaderName || null,
-        reason: "login",
+        leaderName,
+        sessionToken: token,
+        teamId: res.team.id,
       });
 
-      await loadDashboard(email, res.team.name);
+      setSessionEmail(email);
+      setSessionToken(token);
+      if (leaderName) {
+        setSessionLeaderName(leaderName);
+      }
+      setTeamData(res.team);
+
+      await loadDashboard(email, res.team.name, token);
     } catch (e: any) {
       setLoginError(e?.message || "Sign in failed. Check your Team Name and Leader Email.");
     } finally {
@@ -362,17 +348,8 @@ function TeamPortal() {
   };
 
   const handleSignOut = async () => {
-    clearTeamSessionStorage();
-    // Broadcast logout to all other open tabs immediately
-    broadcastTeamAuthChange({
-      email: null,
-      reason: "logout",
-    });
-
-    const { data: currentAuth } = await supabase.auth.getUser();
-    if (currentAuth?.user?.email !== "admin@admin.com") {
-      await supabase.auth.signOut();
-    }
+    // Only log out this individual tab; other open tabs remain completely unaffected
+    clearTeamTabSession();
     clearSessionState();
   };
 
@@ -386,6 +363,7 @@ function TeamPortal() {
       const memberStrings = members.map((m) => `${m.name.trim()} - ${m.role.trim()}`);
       await updateReqsFn({
         data: {
+          sessionToken: sessionToken || undefined,
           teamId: teamData.id,
           leaderEmail: sessionEmail,
           category: selectedTopic,
@@ -467,6 +445,9 @@ function TeamPortal() {
       fd.append("projectDescription", projectDescription);
       fd.append("members", JSON.stringify(memberStrings));
       fd.append("file", file, file.name);
+      if (sessionToken) {
+        fd.append("sessionToken", sessionToken);
+      }
 
       const res = await fetch("/api/public/submit", { method: "POST", body: fd });
       const j = await res.json();

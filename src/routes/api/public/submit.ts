@@ -49,6 +49,22 @@ export const Route = createFileRoute("/api/public/submit")({
           }
           const teamId = existing.id;
 
+          // Authenticate submission via sessionToken or leaderEmail verification
+          const sessionToken = form.get("sessionToken");
+          const rawLeaderEmail = form.get("leaderEmail");
+
+          if (typeof sessionToken === "string" && sessionToken.trim()) {
+            const { verifyTeamSessionToken } = await import("@/lib/team-token.server");
+            const v = verifyTeamSessionToken(sessionToken);
+            if (!v.valid || v.payload?.teamId !== teamId) {
+              return json({ error: "Unauthorized: Invalid or expired session token." }, 403);
+            }
+          } else if (typeof rawLeaderEmail === "string" && rawLeaderEmail.trim() && existing.leader_email) {
+            if (existing.leader_email.trim().toLowerCase() !== rawLeaderEmail.trim().toLowerCase()) {
+              return json({ error: "Forbidden: Leader email does not match registered team leader." }, 403);
+            }
+          }
+
           // Save / update rich team requirements
           try {
             const { getTeamProfile, saveTeamProfile } = await import("@/lib/team-store.server");

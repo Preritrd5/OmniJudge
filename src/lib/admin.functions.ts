@@ -802,6 +802,7 @@ export const adminCreateTeam = registerTeamLeader;
 export const updateTeamRequirements = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z.object({
+      sessionToken: z.string().optional(),
       teamId: z.string().uuid(),
       leaderEmail: z.string().trim().email(),
       category: z.string().optional(),
@@ -814,6 +815,18 @@ export const updateTeamRequirements = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { getTeamProfile, saveTeamProfile } = await import("@/lib/team-store.server");
+
+    // If cryptographic session token is supplied, verify it
+    if (data.sessionToken) {
+      const { verifyTeamSessionToken } = await import("@/lib/team-token.server");
+      const v = verifyTeamSessionToken(data.sessionToken);
+      if (!v.valid || v.payload?.teamId !== data.teamId) {
+        throw new Error("Forbidden: Invalid or expired session token for this team.");
+      }
+      if (v.payload?.email.toLowerCase() !== data.leaderEmail.toLowerCase()) {
+        throw new Error("Forbidden: Session token email does not match leader email.");
+      }
+    }
 
     // Authoritative verification: Check that leaderEmail owns teamId
     const { data: teamRow } = await supabaseAdmin
@@ -848,6 +861,7 @@ export const updateTeamRequirements = createServerFn({ method: "POST" })
 export const getTeamDashboard = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z.object({
+      sessionToken: z.string().optional(),
       email: z.string().trim().optional(),
       teamName: z.string().trim().optional(),
     }).parse(d),
@@ -855,54 +869,91 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { findTeamProfileByEmail, findTeamProfileByName, getTeamProfile } = await import("@/lib/team-store.server");
-
-    if (!data.email && !data.teamName) {
-      return { found: false, team: null };
-    }
+    const { signTeamSessionToken, verifyTeamSessionToken } = await import("@/lib/team-token.server");
 
     let teamRecord: any = null;
+    let validatedEmail: string | null | undefined = data.email;
 
-    // 1. If both teamName AND email are provided: strict verification (both must match)
-    if (data.teamName && data.email) {
-      const { data: matchBoth } = await supabaseAdmin
-        .from("teams")
-        .select("id, name, created_at, leader_email")
-        .ilike("leader_email", data.email)
-        .ilike("name", data.teamName)
-        .maybeSingle();
-      if (matchBoth) {
-        teamRecord = matchBoth;
-      } else {
-        // Check matching profile in team store
-        const p = findTeamProfileByName(data.teamName);
-        if (p && p.leaderEmail?.trim().toLowerCase() === data.email.trim().toLowerCase()) {
-          teamRecord = {
-            id: p.teamId,
-            name: p.teamName,
-            leader_email: p.leaderEmail,
-            created_at: p.createdAt,
-          };
+    // 0. If sessionToken is provided, cryptographically verify it
+    if (data.sessionToken) {
+      const v = verifyTeamSessionToken(data.sessionToken);
+      if (v.valid && v.payload) {
+        const { data: tokenTeam } = await supabaseAdmin
+          .from("teams")
+          .select("id, name, created_at, leader_email")
+          .eq("id", v.payload.teamId)
+          .maybeSingle();
+
+        if (tokenTeam) {
+          teamRecord = tokenTeam;
+          validatedEmail = tokenTeam.leader_email;
+        } else {
+          const p = getTeamProfile(v.payload.teamId);
+          if (p) {
+            teamRecord = {
+              id: p.teamId,
+              name: p.teamName,
+              leader_email: p.leaderEmail,
+              created_at: p.createdAt,
+            };
+            validatedEmail = p.leaderEmail;
+          }
         }
+      } else if (!data.email && !data.teamName) {
+        return { found: false, team: null, error: v.error || "Invalid session token" };
       }
-      // CRITICAL: Do NOT fall back to matching by name alone when email was provided!
-    } else if (data.email) {
-      // 2. Lookup by verified leader email (e.g. restoring session)
-      const { data: matchEmail } = await supabaseAdmin
-        .from("teams")
-        .select("id, name, created_at, leader_email")
-        .ilike("leader_email", data.email)
-        .maybeSingle();
-      if (matchEmail) {
-        teamRecord = matchEmail;
-      } else {
-        const fallback = findTeamProfileByEmail(data.email);
-        if (fallback) {
-          teamRecord = {
-            id: fallback.teamId,
-            name: fallback.teamName,
-            leader_email: fallback.leaderEmail,
-            created_at: fallback.createdAt,
-          };
+    }
+
+    if (!teamRecord) {
+      if (!data.email && !data.teamName) {
+        return { found: false, team: null };
+      }
+
+      // 1. If both teamName AND email are provided: strict verification (both must match)
+      if (data.teamName && data.email) {
+        const { data: matchBoth } = await supabaseAdmin
+          .from("teams")
+          .select("id, name, created_at, leader_email")
+          .ilike("leader_email", data.email)
+          .ilike("name", data.teamName)
+          .maybeSingle();
+        if (matchBoth) {
+          teamRecord = matchBoth;
+          validatedEmail = matchBoth.leader_email;
+        } else {
+          // Check matching profile in team store
+          const p = findTeamProfileByName(data.teamName);
+          if (p && p.leaderEmail?.trim().toLowerCase() === data.email.trim().toLowerCase()) {
+            teamRecord = {
+              id: p.teamId,
+              name: p.teamName,
+              leader_email: p.leaderEmail,
+              created_at: p.createdAt,
+            };
+            validatedEmail = p.leaderEmail;
+          }
+        }
+      } else if (data.email) {
+        // 2. Lookup by verified leader email (e.g. restoring session)
+        const { data: matchEmail } = await supabaseAdmin
+          .from("teams")
+          .select("id, name, created_at, leader_email")
+          .ilike("leader_email", data.email)
+          .maybeSingle();
+        if (matchEmail) {
+          teamRecord = matchEmail;
+          validatedEmail = matchEmail.leader_email;
+        } else {
+          const fallback = findTeamProfileByEmail(data.email);
+          if (fallback) {
+            teamRecord = {
+              id: fallback.teamId,
+              name: fallback.teamName,
+              leader_email: fallback.leaderEmail,
+              created_at: fallback.createdAt,
+            };
+            validatedEmail = fallback.leaderEmail;
+          }
         }
       }
     }
@@ -912,6 +963,14 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
     if (!teamRecord) {
       return { found: false, team: null };
     }
+
+    // Issue tamper-proof cryptographic session token for this tab
+    const sessionToken = signTeamSessionToken({
+      teamId: teamRecord.id,
+      email: teamRecord.leader_email || validatedEmail || "",
+      teamName: teamRecord.name,
+      leaderName: profile?.leaderName,
+    });
 
     const { data: subs } = await supabaseAdmin
       .from("submissions")
@@ -968,6 +1027,7 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
 
     return {
       found: true,
+      sessionToken,
       team: {
         id: teamRecord.id,
         name: teamRecord.name,
@@ -988,8 +1048,20 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
 // ─── Score-Safe Notifications Functions ──────────────────────────────────────
 
 export const getStudentNotifications = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ teamId: z.string().uuid() }).parse(d))
+  .inputValidator((d) =>
+    z.object({
+      teamId: z.string().uuid(),
+      sessionToken: z.string().optional(),
+    }).parse(d),
+  )
   .handler(async ({ data }) => {
+    if (data.sessionToken) {
+      const { verifyTeamSessionToken } = await import("@/lib/team-token.server");
+      const v = verifyTeamSessionToken(data.sessionToken);
+      if (!v.valid || v.payload?.teamId !== data.teamId) {
+        throw new Error("Unauthorized: Invalid session token for team");
+      }
+    }
     const { getNotificationsForTeam } = await import("@/lib/notifications.server");
     return { notifications: getNotificationsForTeam(data.teamId) };
   });
@@ -1003,8 +1075,20 @@ export const markNotificationRead = createServerFn({ method: "POST" })
   });
 
 export const markAllNotificationsRead = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ teamId: z.string().uuid() }).parse(d))
+  .inputValidator((d) =>
+    z.object({
+      teamId: z.string().uuid(),
+      sessionToken: z.string().optional(),
+    }).parse(d),
+  )
   .handler(async ({ data }) => {
+    if (data.sessionToken) {
+      const { verifyTeamSessionToken } = await import("@/lib/team-token.server");
+      const v = verifyTeamSessionToken(data.sessionToken);
+      if (!v.valid || v.payload?.teamId !== data.teamId) {
+        throw new Error("Unauthorized: Invalid session token for team");
+      }
+    }
     const { markAllNotificationsAsRead } = await import("@/lib/notifications.server");
     const count = markAllNotificationsAsRead(data.teamId);
     return { ok: true, count };

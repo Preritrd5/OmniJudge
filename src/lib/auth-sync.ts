@@ -1,15 +1,35 @@
 /**
  * Cross-Tab Authentication & Session Synchronization Manager
  *
- * Uses BroadcastChannel (with window storage event fallback) to coordinate
- * session state across multiple open tabs/windows in real time.
+ * NOTE ON SESSION ISOLATION:
+ * Team portal sessions are strictly tab-isolated using window.sessionStorage.
+ * Cross-tab broadcasting is explicitly disabled for team leaders so that
+ * different team accounts can be used concurrently in separate tabs without collision.
+ *
+ * Admin sessions (Supabase auth) continue to use synchronized state across tabs.
  */
+
+import {
+  getTeamTabSession,
+  setTeamTabSession,
+  clearTeamTabSession,
+  TeamSessionData,
+  purgeLegacyLocalStorage,
+} from "./team-session";
 
 export interface TeamSession {
   email: string;
   teamName: string;
   leaderName: string;
 }
+
+export type AdminAuthSyncEvent = {
+  type: "ADMIN_AUTH_CHANGED";
+  event: "SIGNED_IN" | "SIGNED_OUT" | "USER_UPDATED" | "TOKEN_REFRESHED";
+  userId: string | null;
+  email: string | null;
+  timestamp: number;
+};
 
 export type TeamAuthSyncEvent = {
   type: "TEAM_AUTH_CHANGED";
@@ -20,20 +40,9 @@ export type TeamAuthSyncEvent = {
   timestamp: number;
 };
 
-export type AdminAuthSyncEvent = {
-  type: "ADMIN_AUTH_CHANGED";
-  event: "SIGNED_IN" | "SIGNED_OUT" | "USER_UPDATED" | "TOKEN_REFRESHED";
-  userId: string | null;
-  email: string | null;
-  timestamp: number;
-};
-
 export type AuthSyncEvent = TeamAuthSyncEvent | AdminAuthSyncEvent;
 
 const CHANNEL_NAME = "sih_auth_sync_channel";
-const TEAM_EMAIL_KEYS = ["sih_leader_email", "ideathon_leader_email"];
-const TEAM_NAME_KEYS = ["sih_team_name"];
-const TEAM_LEADER_NAME_KEYS = ["sih_leader_name", "ideathon_leader_name"];
 
 // Singleton BroadcastChannel instance on the client
 let broadcastChannel: BroadcastChannel | null = null;
@@ -54,56 +63,42 @@ function getBroadcastChannel(): BroadcastChannel | null {
 }
 
 /**
- * Safely retrieve current team session details from localStorage.
+ * Retrieve current team session details strictly from tab sessionStorage.
  */
 export function getTeamSessionFromStorage(): TeamSession | null {
-  if (typeof window === "undefined") return null;
-
-  const email =
-    localStorage.getItem("sih_leader_email") ||
-    localStorage.getItem("ideathon_leader_email");
-
-  if (!email || !email.trim()) return null;
-
-  const teamName = localStorage.getItem("sih_team_name") || "";
-  const leaderName =
-    localStorage.getItem("sih_leader_name") ||
-    localStorage.getItem("ideathon_leader_name") ||
-    "";
-
+  const tab = getTeamTabSession();
+  if (!tab) return null;
   return {
-    email: email.trim().toLowerCase(),
-    teamName: teamName.trim(),
-    leaderName: leaderName.trim(),
+    email: tab.email,
+    teamName: tab.teamName,
+    leaderName: tab.leaderName || "",
   };
 }
 
 /**
- * Cleanly remove all team-related authentication keys from localStorage.
+ * Remove team session from current tab's sessionStorage.
  */
 export function clearTeamSessionStorage(): void {
-  if (typeof window === "undefined") return;
-
-  for (const k of [...TEAM_EMAIL_KEYS, ...TEAM_NAME_KEYS, ...TEAM_LEADER_NAME_KEYS]) {
-    localStorage.removeItem(k);
-  }
+  clearTeamTabSession();
+  purgeLegacyLocalStorage();
 }
 
 /**
- * Save team session keys to localStorage.
+ * Save team session to current tab's sessionStorage.
  */
-export function setTeamSessionStorage(session: TeamSession): void {
-  if (typeof window === "undefined") return;
-
-  localStorage.setItem("sih_leader_email", session.email.trim().toLowerCase());
-  localStorage.setItem("sih_team_name", session.teamName.trim());
-  if (session.leaderName) {
-    localStorage.setItem("sih_leader_name", session.leaderName.trim());
-  }
+export function setTeamSessionStorage(session: TeamSession & { sessionToken?: string; teamId?: string }): void {
+  setTeamTabSession({
+    email: session.email,
+    teamName: session.teamName,
+    leaderName: session.leaderName,
+    sessionToken: session.sessionToken || "legacy-compat",
+    teamId: session.teamId,
+  });
+  purgeLegacyLocalStorage();
 }
 
 /**
- * Broadcast an authentication event to all other open tabs/windows.
+ * Broadcast an administrative authentication event to all other open tabs/windows.
  */
 function broadcast(event: AuthSyncEvent): void {
   if (typeof window === "undefined") return;
@@ -117,30 +112,22 @@ function broadcast(event: AuthSyncEvent): void {
     }
   }
 
-  // Also update an internal heartbeat storage key to trigger storage event
-  // in browsers where BroadcastChannel might be isolated (or fallback)
   try {
-    localStorage.setItem("sih_auth_sync_ping", `${event.type}:${Date.now()}`);
+    localStorage.setItem("sih_admin_auth_ping", `${event.type}:${Date.now()}`);
   } catch {}
 }
 
 /**
- * Notify other tabs that team portal auth has changed (login or logout).
+ * NO-OP: Team auth broadcasting is disabled by design to ensure complete
+ * multi-tab isolation between different team leader sessions.
  */
-export function broadcastTeamAuthChange(payload: {
+export function broadcastTeamAuthChange(_payload: {
   email: string | null;
   teamName?: string | null;
   leaderName?: string | null;
   reason: "login" | "logout" | "storage_sync";
 }): void {
-  broadcast({
-    type: "TEAM_AUTH_CHANGED",
-    email: payload.email,
-    teamName: payload.teamName,
-    leaderName: payload.leaderName,
-    reason: payload.reason,
-    timestamp: Date.now(),
-  });
+  // Deliberately no-op: team accounts are strictly tab-isolated.
 }
 
 /**
@@ -161,10 +148,7 @@ export function broadcastAdminAuthChange(payload: {
 }
 
 /**
- * Subscribe to cross-tab auth synchronization events.
- * Listens on both BroadcastChannel and window "storage" events.
- *
- * Returns an unsubscribe function.
+ * Subscribe to cross-tab auth synchronization events for Admin users.
  */
 export function subscribeAuthSync(handler: (event: AuthSyncEvent) => void): () => void {
   if (typeof window === "undefined") {
@@ -174,7 +158,8 @@ export function subscribeAuthSync(handler: (event: AuthSyncEvent) => void): () =
   // 1. BroadcastChannel listener
   const channel = getBroadcastChannel();
   const handleBroadcastMessage = (e: MessageEvent) => {
-    if (e.data && (e.data.type === "TEAM_AUTH_CHANGED" || e.data.type === "ADMIN_AUTH_CHANGED")) {
+    // Only forward admin auth events across tabs
+    if (e.data && e.data.type === "ADMIN_AUTH_CHANGED") {
       handler(e.data as AuthSyncEvent);
     }
   };
@@ -183,22 +168,8 @@ export function subscribeAuthSync(handler: (event: AuthSyncEvent) => void): () =
     channel.addEventListener("message", handleBroadcastMessage);
   }
 
-  // 2. Storage event listener (handles direct cross-tab localStorage mutations)
+  // 2. Storage event listener (handles direct cross-tab Supabase localStorage mutations)
   const handleStorageEvent = (e: StorageEvent) => {
-    // If the key is team-related:
-    if (e.key === "sih_leader_email" || e.key === "ideathon_leader_email") {
-      const newEmail = e.newValue ? e.newValue.trim().toLowerCase() : null;
-      const teamSession = getTeamSessionFromStorage();
-      handler({
-        type: "TEAM_AUTH_CHANGED",
-        email: newEmail,
-        teamName: teamSession?.teamName || null,
-        leaderName: teamSession?.leaderName || null,
-        reason: newEmail ? "login" : "logout",
-        timestamp: Date.now(),
-      });
-    }
-
     // If Supabase auth storage key changed:
     if (e.key && e.key.startsWith("sb-") && e.key.endsWith("-auth-token")) {
       if (!e.newValue) {
