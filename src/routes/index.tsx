@@ -92,7 +92,7 @@ function Landing() {
         {/* Stats 3D glass strip */}
         <div className="mt-16 grid grid-cols-3 overflow-hidden rounded-2xl chrome-glass text-center card-3d shadow-[0_20px_50px_-15px_rgba(0,0,0,0.7),_inset_0_1px_1px_rgba(255,255,255,0.2)]">
           {[
-            ["17", "Innovation Themes"],
+            ["18", "Innovation Themes"],
             ["< 3 MB", "Pitch Deck Limit"],
             ["Dual-Jury", "Official Evaluation"],
           ].map(([n, l], i) => (
@@ -163,7 +163,7 @@ function Landing() {
                   <div className="text-[10px] uppercase font-black tracking-widest text-emerald-300">
                     High Integrity Standard
                   </div>
-                  <h3 className="font-serif text-lg font-bold text-white">
+                  <h3 className="font-serif text-lg font-bold text-slate-100">
                     Authentic Student Innovation &amp; Originality
                   </h3>
                   <p className="text-xs text-slate-300 mt-0.5 max-w-2xl">
@@ -185,8 +185,8 @@ function Landing() {
                 step: "01",
                 icon: "💡",
                 title: "Theme Selection & Formulation",
-                desc: "Choose from the 17 official SIH 2026 innovation tracks. Identify an acute domain pain point and design a tech-driven problem-solving model.",
-                badge: "17 Approved Themes",
+                desc: "Choose from the 18 official SIH 2026 innovation tracks. Identify an acute domain pain point and design a tech-driven problem-solving model.",
+                badge: "18 Approved Themes",
               },
               {
                 step: "02",
@@ -261,7 +261,7 @@ function Landing() {
           <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-center">
               <span className="text-2xl mb-1 block">🎯</span>
-              <h4 className="text-xs font-bold text-slate-200">17 Innovation Themes</h4>
+              <h4 className="text-xs font-bold text-slate-200">18 Innovation Themes</h4>
               <p className="text-[11px] text-slate-400 mt-1">Smart Automation, Clean Energy, MedTech, Robotics, and more.</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-center">

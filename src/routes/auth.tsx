@@ -1,8 +1,12 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Footer from "@/components/Footer";
+import {
+  broadcastAdminAuthChange,
+  subscribeAuthSync,
+} from "@/lib/auth-sync";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -22,25 +26,75 @@ function AuthPage() {
   const [err, setErr] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (data.user?.email === "admin@admin.com") {
+  const checkAndRedirect = useCallback(
+    async (user: any) => {
+      if (!user) return;
+      if (user.email === "admin@admin.com") {
         navigate({ to: "/admin" });
         return;
       }
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (roleData) {
+        navigate({ to: "/admin" });
+      }
+    },
+    [navigate]
+  );
+
+  useEffect(() => {
+    // Check initial session on mount
+    supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
-        const { data: roleData } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", data.user.id)
-          .eq("role", "admin")
-          .maybeSingle();
-        if (roleData) {
-          navigate({ to: "/admin" });
-        }
+        checkAndRedirect(data.user);
       }
     });
-  }, [navigate]);
+
+    // Listen for live auth events in this or child frames
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.user) {
+        checkAndRedirect(session.user);
+      }
+    });
+
+    // Listen for cross-tab auth events via BroadcastChannel/storage
+    const unsubscribeSync = subscribeAuthSync((event) => {
+      if (event.type === "ADMIN_AUTH_CHANGED" && event.event === "SIGNED_IN") {
+        supabase.auth.getUser().then(({ data }) => {
+          if (data.user) {
+            checkAndRedirect(data.user);
+          }
+        });
+      }
+    });
+
+    // Check on tab focus / visibility
+    const handleFocus = () => {
+      if (document.visibilityState === "visible") {
+        supabase.auth.getUser().then(({ data }) => {
+          if (data.user) {
+            checkAndRedirect(data.user);
+          }
+        });
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleFocus);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      subscription.unsubscribe();
+      unsubscribeSync();
+      document.removeEventListener("visibilitychange", handleFocus);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [checkAndRedirect]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +119,14 @@ function AuthPage() {
           throw new Error("Access Denied: This account does not have admin permissions.");
         }
       }
+
+      // Notify all open tabs of successful admin sign-in
+      broadcastAdminAuthChange({
+        event: "SIGNED_IN",
+        userId: data.user.id,
+        email: data.user.email ?? null,
+      });
+
       navigate({ to: "/admin" });
     } catch (e: any) {
       setErr(e?.message || "Invalid credentials. Please check your email and password.");

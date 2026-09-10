@@ -16,6 +16,12 @@ import {
   markAllNotificationsRead,
   getStudentAnnouncements,
 } from "@/lib/admin.functions";
+import {
+  broadcastTeamAuthChange,
+  subscribeAuthSync,
+  getTeamSessionFromStorage,
+  clearTeamSessionStorage,
+} from "@/lib/auth-sync";
 
 export const Route = createFileRoute("/team")({
   head: () => ({
@@ -85,11 +91,16 @@ function TeamPortal() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activeSubmittingProposal, setActiveSubmittingProposal] = useState<any | null>(null);
 
+  // In-flight request cancellation counters to prevent race condition stale data leakage
+  const dashboardReqIdRef = useRef(0);
+  const notifReqIdRef = useRef(0);
+
   const loadNotifications = async (teamId: string) => {
     if (!teamId) return;
+    const reqId = ++notifReqIdRef.current;
     try {
       const res = await getNotificationsFn({ data: { teamId } });
-      if (res?.notifications) {
+      if (reqId === notifReqIdRef.current && res?.notifications) {
         setNotifications(res.notifications);
       }
     } catch {}
@@ -121,6 +132,21 @@ function TeamPortal() {
     } catch {}
   };
 
+  const clearSessionState = () => {
+    dashboardReqIdRef.current++;
+    notifReqIdRef.current++;
+    setSessionEmail(null);
+    setSessionLeaderName("");
+    setTeamData(null);
+    setNotifications([]);
+    setUploadDone(null);
+    setFile(null);
+    setActiveSubmittingProposal(null);
+    setLoginTeamName("");
+    setLoginEmail("");
+    setLoginError(null);
+  };
+
   useEffect(() => {
     getTopicsFn()
       .then((res) => setTopics(res.topics || []))
@@ -128,13 +154,11 @@ function TeamPortal() {
 
     loadAnnouncements();
 
-    const savedEmail = localStorage.getItem("sih_leader_email") || localStorage.getItem("ideathon_leader_email");
-    const savedName = localStorage.getItem("sih_leader_name") || localStorage.getItem("ideathon_leader_name");
-    const savedTeamName = localStorage.getItem("sih_team_name");
-    if (savedEmail) {
-      setSessionEmail(savedEmail);
-      if (savedName) setSessionLeaderName(savedName);
-      loadDashboard(savedEmail, savedTeamName || undefined);
+    const currentSession = getTeamSessionFromStorage();
+    if (currentSession?.email) {
+      setSessionEmail(currentSession.email);
+      if (currentSession.leaderName) setSessionLeaderName(currentSession.leaderName);
+      loadDashboard(currentSession.email, currentSession.teamName || undefined);
     } else {
       supabase.auth.getUser().then(({ data }) => {
         if (data.user?.email) {
@@ -145,17 +169,104 @@ function TeamPortal() {
         }
       });
     }
+
+    // Subscribe to cross-tab auth synchronization events
+    const unsubscribeAuth = subscribeAuthSync((event) => {
+      if (event.type === "TEAM_AUTH_CHANGED") {
+        if (!event.email) {
+          // Logged out in another tab
+          clearSessionState();
+        } else if (event.email) {
+          // Logged in or switched user/team in another tab
+          const nextEmail = event.email;
+          setSessionEmail((prevEmail) => {
+            if (prevEmail !== nextEmail) {
+              setTeamData(null);
+              setNotifications([]);
+              setUploadDone(null);
+              setFile(null);
+              setActiveSubmittingProposal(null);
+              if (event.leaderName) setSessionLeaderName(event.leaderName);
+              loadDashboard(nextEmail, event.teamName || undefined);
+              return nextEmail;
+            }
+            return prevEmail;
+          });
+        }
+      }
+    });
+
+    // Reconcile when tab becomes visible, receives window focus, or restores from bfcache
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        const stored = getTeamSessionFromStorage();
+        setSessionEmail((prevEmail) => {
+          if (!stored?.email && prevEmail) {
+            clearSessionState();
+            return null;
+          }
+          if (stored?.email && stored.email !== prevEmail) {
+            setTeamData(null);
+            setNotifications([]);
+            setUploadDone(null);
+            setFile(null);
+            setActiveSubmittingProposal(null);
+            if (stored.leaderName) setSessionLeaderName(stored.leaderName);
+            loadDashboard(stored.email, stored.teamName || undefined);
+            return stored.email;
+          }
+          return prevEmail;
+        });
+      }
+    };
+
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        handleVisibilityOrFocus();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      unsubscribeAuth();
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
   }, []);
 
   // Poll for background status & notification updates every 6 seconds
   useEffect(() => {
     if (!teamData?.id || !sessionEmail) return;
     const interval = setInterval(() => {
+      // First verify localStorage still matches sessionEmail
+      const currentStored = getTeamSessionFromStorage();
+      if (!currentStored?.email || currentStored.email !== sessionEmail) {
+        // Detected cross-tab session change during poll cycle
+        if (!currentStored?.email) {
+          clearSessionState();
+        } else {
+          setTeamData(null);
+          setNotifications([]);
+          setUploadDone(null);
+          setFile(null);
+          setActiveSubmittingProposal(null);
+          setSessionEmail(currentStored.email);
+          if (currentStored.leaderName) setSessionLeaderName(currentStored.leaderName);
+          loadDashboard(currentStored.email, currentStored.teamName || undefined);
+        }
+        return;
+      }
+
       loadNotifications(teamData.id);
       loadAnnouncements();
       getDashboardFn({ data: { email: sessionEmail, teamName: teamData.name } })
         .then((res) => {
-          if (res?.found && res?.team) {
+          const currentStored = getTeamSessionFromStorage();
+          if (currentStored?.email === sessionEmail && res?.found && res?.team) {
             setTeamData(res.team);
           }
         })
@@ -165,9 +276,15 @@ function TeamPortal() {
   }, [teamData?.id, sessionEmail]);
 
   const loadDashboard = async (email: string, teamName?: string) => {
+    const currentReqId = ++dashboardReqIdRef.current;
     setDashboardLoading(true);
     try {
       const res = await getDashboardFn({ data: { email, teamName } });
+      // Discard stale in-flight response if session changed or was cleared
+      if (currentReqId !== dashboardReqIdRef.current) return;
+      const stored = getTeamSessionFromStorage();
+      if (!stored?.email || stored.email !== email) return;
+
       if (res.found && res.team) {
         setTeamData(res.team);
         if (res.team.id) {
@@ -194,7 +311,9 @@ function TeamPortal() {
     } catch (e: any) {
       console.error("Dashboard error:", e);
     } finally {
-      setDashboardLoading(false);
+      if (currentReqId === dashboardReqIdRef.current) {
+        setDashboardLoading(false);
+      }
     }
   };
 
@@ -218,12 +337,22 @@ function TeamPortal() {
 
       localStorage.setItem("sih_leader_email", email);
       localStorage.setItem("sih_team_name", res.team.name);
-      if (res.team?.profile?.leaderName) {
-        localStorage.setItem("sih_leader_name", res.team.profile.leaderName);
-        setSessionLeaderName(res.team.profile.leaderName);
+      const leaderName = res.team?.profile?.leaderName || "";
+      if (leaderName) {
+        localStorage.setItem("sih_leader_name", leaderName);
+        setSessionLeaderName(leaderName);
       }
       setSessionEmail(email);
       setTeamData(res.team);
+
+      // Broadcast login to all other open tabs immediately
+      broadcastTeamAuthChange({
+        email,
+        teamName: res.team.name,
+        leaderName: leaderName || null,
+        reason: "login",
+      });
+
       await loadDashboard(email, res.team.name);
     } catch (e: any) {
       setLoginError(e?.message || "Sign in failed. Check your Team Name and Leader Email.");
@@ -233,19 +362,18 @@ function TeamPortal() {
   };
 
   const handleSignOut = async () => {
-    localStorage.removeItem("sih_leader_email");
-    localStorage.removeItem("sih_team_name");
-    localStorage.removeItem("sih_leader_name");
-    localStorage.removeItem("ideathon_leader_email");
-    localStorage.removeItem("ideathon_leader_name");
+    clearTeamSessionStorage();
+    // Broadcast logout to all other open tabs immediately
+    broadcastTeamAuthChange({
+      email: null,
+      reason: "logout",
+    });
+
     const { data: currentAuth } = await supabase.auth.getUser();
     if (currentAuth?.user?.email !== "admin@admin.com") {
       await supabase.auth.signOut();
     }
-    setSessionEmail(null);
-    setTeamData(null);
-    setUploadDone(null);
-    setFile(null);
+    clearSessionState();
   };
 
   const handleSaveRequirements = async (e: React.FormEvent) => {

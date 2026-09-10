@@ -86,6 +86,7 @@ const DEFAULT_TOPICS = [
   { id: "T15", name: "Toys & Games" },
   { id: "T16", name: "Transportation & Logistics" },
   { id: "T17", name: "Travel & Tourism" },
+  { id: "T18", name: "Others" },
 ];
 
 function readTopicsFile() {
@@ -811,8 +812,22 @@ export const updateTeamRequirements = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { getTeamProfile, saveTeamProfile } = await import("@/lib/team-store.server");
+
+    // Authoritative verification: Check that leaderEmail owns teamId
+    const { data: teamRow } = await supabaseAdmin
+      .from("teams")
+      .select("id, leader_email")
+      .eq("id", data.teamId)
+      .maybeSingle();
+
     const current = getTeamProfile(data.teamId);
+    const expectedEmail = teamRow?.leader_email || current?.leaderEmail;
+
+    if (expectedEmail && expectedEmail.trim().toLowerCase() !== data.leaderEmail.trim().toLowerCase()) {
+      throw new Error("Forbidden: You are not authorized to update requirements for this team.");
+    }
 
     saveTeamProfile({
       teamId: data.teamId,
@@ -847,7 +862,7 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
 
     let teamRecord: any = null;
 
-    // 1. Try matching both teamName AND email if both provided
+    // 1. If both teamName AND email are provided: strict verification (both must match)
     if (data.teamName && data.email) {
       const { data: matchBoth } = await supabaseAdmin
         .from("teams")
@@ -857,11 +872,21 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
         .maybeSingle();
       if (matchBoth) {
         teamRecord = matchBoth;
+      } else {
+        // Check matching profile in team store
+        const p = findTeamProfileByName(data.teamName);
+        if (p && p.leaderEmail?.trim().toLowerCase() === data.email.trim().toLowerCase()) {
+          teamRecord = {
+            id: p.teamId,
+            name: p.teamName,
+            leader_email: p.leaderEmail,
+            created_at: p.createdAt,
+          };
+        }
       }
-    }
-
-    // 2. Fallback: match by email
-    if (!teamRecord && data.email) {
+      // CRITICAL: Do NOT fall back to matching by name alone when email was provided!
+    } else if (data.email) {
+      // 2. Lookup by verified leader email (e.g. restoring session)
       const { data: matchEmail } = await supabaseAdmin
         .from("teams")
         .select("id, name, created_at, leader_email")
@@ -869,44 +894,20 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
         .maybeSingle();
       if (matchEmail) {
         teamRecord = matchEmail;
-      }
-    }
-
-    // 3. Fallback: match by team name
-    if (!teamRecord && data.teamName) {
-      const { data: matchName } = await supabaseAdmin
-        .from("teams")
-        .select("id, name, created_at, leader_email")
-        .ilike("name", data.teamName)
-        .maybeSingle();
-      if (matchName) {
-        teamRecord = matchName;
+      } else {
+        const fallback = findTeamProfileByEmail(data.email);
+        if (fallback) {
+          teamRecord = {
+            id: fallback.teamId,
+            name: fallback.teamName,
+            leader_email: fallback.leaderEmail,
+            created_at: fallback.createdAt,
+          };
+        }
       }
     }
 
     let profile = teamRecord ? getTeamProfile(teamRecord.id) : null;
-
-    // 4. File store fallback
-    if (!teamRecord) {
-      let fallback = data.email ? findTeamProfileByEmail(data.email) : null;
-      if (!fallback && data.teamName) {
-        fallback = findTeamProfileByName(data.teamName);
-      }
-      if (fallback) {
-        profile = fallback;
-        const { data: t } = await supabaseAdmin
-          .from("teams")
-          .select("id, name, created_at, leader_email")
-          .eq("id", fallback.teamId)
-          .maybeSingle();
-        teamRecord = t || {
-          id: fallback.teamId,
-          name: fallback.teamName,
-          leader_email: fallback.leaderEmail,
-          created_at: fallback.createdAt,
-        };
-      }
-    }
 
     if (!teamRecord) {
       return { found: false, team: null };

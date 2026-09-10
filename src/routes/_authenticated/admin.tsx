@@ -32,6 +32,10 @@ import {
   generateAnnouncementReport,
   openPdfWindow,
 } from "@/lib/pdf-reports";
+import {
+  broadcastAdminAuthChange,
+  subscribeAuthSync,
+} from "@/lib/auth-sync";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -194,7 +198,93 @@ function AdminDashboard() {
     supabase.auth.getUser().then(({ data }) => {
       setCurrentUser(data.user || null);
     });
-  }, []);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT" || !session) {
+        await queryClient.cancelQueries();
+        queryClient.clear();
+        setCurrentUser(null);
+        navigate({ to: "/auth" });
+      } else if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "TOKEN_REFRESHED") {
+        const newUser = session.user;
+        setCurrentUser((prev: any) => {
+          if (prev?.id && prev.id !== newUser.id) {
+            queryClient.cancelQueries().then(() => {
+              queryClient.clear();
+              queryClient.invalidateQueries();
+            });
+          }
+          return newUser;
+        });
+      }
+    });
+
+    const unsubscribeSync = subscribeAuthSync((event) => {
+      if (event.type === "ADMIN_AUTH_CHANGED") {
+        if (event.event === "SIGNED_OUT") {
+          queryClient.cancelQueries().then(() => queryClient.clear());
+          setCurrentUser(null);
+          navigate({ to: "/auth" });
+        } else if (event.event === "SIGNED_IN") {
+          supabase.auth.getUser().then(({ data }) => {
+            if (data.user) {
+              setCurrentUser((prev: any) => {
+                if (prev?.id && prev.id !== data.user.id) {
+                  queryClient.cancelQueries().then(() => {
+                    queryClient.clear();
+                    queryClient.invalidateQueries();
+                  });
+                }
+                return data.user;
+              });
+            }
+          });
+        }
+      }
+    });
+
+    const handleVisibilityOrFocus = async () => {
+      if (document.visibilityState === "visible") {
+        const { data } = await supabase.auth.getUser();
+        if (!data.user) {
+          await queryClient.cancelQueries();
+          queryClient.clear();
+          setCurrentUser(null);
+          navigate({ to: "/auth" });
+        } else {
+          setCurrentUser((prev: any) => {
+            if (prev?.id && prev.id !== data.user.id) {
+              queryClient.cancelQueries().then(() => {
+                queryClient.clear();
+                queryClient.invalidateQueries();
+              });
+            }
+            return data.user;
+          });
+        }
+      }
+    };
+
+    const handlePageShow = async (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        await handleVisibilityOrFocus();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      subscription.unsubscribe();
+      unsubscribeSync();
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      window.removeEventListener("pageshow", handlePageShow);
+    };
+  }, [navigate, queryClient]);
 
   const teamsQ = useQuery({
     queryKey: ["admin", "teams"],
@@ -419,7 +509,14 @@ function AdminDashboard() {
   };
 
   const signOut = async () => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
     await supabase.auth.signOut();
+    broadcastAdminAuthChange({
+      event: "SIGNED_OUT",
+      userId: null,
+      email: null,
+    });
     navigate({ to: "/auth" });
   };
 
@@ -1453,7 +1550,7 @@ function AdminDashboard() {
                   <div className="mt-2 text-[11px] uppercase tracking-[0.2em] text-amber-300 font-black">
                     Grand Champion (1st Place)
                   </div>
-                  <div className="mt-1 font-serif text-2xl sm:text-3xl font-black text-white">
+                  <div className="mt-1 font-serif text-2xl sm:text-3xl font-black text-slate-100">
                     {leaderboard[0]?.name || "To Be Announced"}
                   </div>
                   <div className="text-xs text-amber-200 mt-1 font-semibold">{leaderboard[0]?.latest?.category || "Top Track Winner"}</div>
@@ -2841,7 +2938,7 @@ function SubmissionModal({
                 <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300 block">
                   Originality &amp; Plagiarism Check
                 </span>
-                <h4 className="font-serif text-base font-bold text-white">
+                <h4 className="font-serif text-base font-bold text-slate-100">
                   {plagiarism.verdict || "Original Work — Authentic Solution"}
                 </h4>
               </div>

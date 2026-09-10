@@ -8,6 +8,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
+import { subscribeAuthSync } from "@/lib/auth-sync";
 
 import appCss from "../styles.css?url";
 
@@ -125,6 +126,19 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    const unsubscribe = subscribeAuthSync((event) => {
+      if (event.type === "ADMIN_AUTH_CHANGED" && event.event === "SIGNED_OUT") {
+        queryClient.cancelQueries().then(() => {
+          queryClient.clear();
+          router.invalidate();
+        });
+      }
+    });
+    return () => unsubscribe();
+  }, [queryClient, router]);
 
   return (
     <QueryClientProvider client={queryClient}>
