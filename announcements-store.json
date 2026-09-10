@@ -1,28 +1,15 @@
 [
   {
-    "id": "ann_welcome_2026",
-    "title": "Welcome to SIH Premier 2026!",
-    "content": "Welcome teams! Please upload your pitch deck proposal in PDF format (less than 3 MB) before the submission deadline. Automated and jury evaluations will follow.",
-    "author": "SIH Premier 2026 Organizing Committee",
+    "id": "test_1",
+    "title": "Test 1",
+    "content": "",
+    "author": "SIH Premier Committee",
     "targetAudience": "all",
     "priority": "normal",
-    "pinned": true,
-    "isPublished": true,
-    "published": true,
-    "createdAt": "2026-09-06T09:40:20.671Z",
-    "updatedAt": "2026-09-06T09:40:20.688Z"
-  },
-  {
-    "id": "ann_jury_eval",
-    "title": "Live Pitch & Jury Presentation Protocol",
-    "content": "Live presentations (F7: Presentation & Communication, F8: Collaboration & Teamwork) will be scored in real time by the jury panel during in-person presentations.",
-    "author": "SIH Premier 2026 Organizing Committee",
-    "targetAudience": "all",
-    "priority": "urgent",
     "pinned": false,
     "isPublished": true,
     "published": true,
-    "createdAt": "2026-09-06T09:40:20.688Z",
-    "updatedAt": "2026-09-06T09:40:20.688Z"
+    "createdAt": "2026-09-10T05:40:37.083Z",
+    "updatedAt": "2026-09-10T05:40:37.083Z"
   }
 ]

@@ -123,16 +123,27 @@ function TeamPortal() {
   };
 
   const handleMarkRead = async (notifId: string) => {
+    // Optimistic UI update
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notifId ? { ...n, read: true, isRead: true } : n))
+    );
     try {
-      await markNotificationReadFn({ data: { id: notifId } });
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notifId ? { ...n, read: true } : n))
-      );
-    } catch {}
+      await markNotificationReadFn({
+        data: {
+          id: notifId,
+          teamId: teamData?.id,
+          sessionToken: sessionToken || undefined,
+        },
+      });
+    } catch (e) {
+      console.warn("Failed to persist notification read state:", e);
+    }
   };
 
   const handleMarkAllRead = async () => {
     if (!teamData?.id) return;
+    // Optimistic UI update
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true, isRead: true })));
     try {
       await markAllNotificationsReadFn({
         data: {
@@ -140,8 +151,9 @@ function TeamPortal() {
           sessionToken: sessionToken || undefined,
         },
       });
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    } catch {}
+    } catch (e) {
+      console.warn("Failed to persist all-notifications-read state:", e);
+    }
   };
 
   const clearSessionState = () => {

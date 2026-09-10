@@ -318,6 +318,8 @@ function AdminDashboard() {
   const [newAnnPriority, setNewAnnPriority] = useState<"normal" | "urgent" | "low">("normal");
   const [newAnnPinned, setNewAnnPinned] = useState(false);
   const [annCreating, setAnnCreating] = useState(false);
+  const [annStatusMsg, setAnnStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [actionAnnId, setActionAnnId] = useState<string | null>(null);
 
   // ── State ──
   const [openTeam, setOpenTeam] = useState<string | null>(null);
@@ -425,18 +427,51 @@ function AdminDashboard() {
       setNewAnnContent("");
       setNewAnnPinned(false);
       setNewAnnPriority("normal");
+      setAnnStatusMsg({ type: "success", text: "Announcement created and published successfully!" });
       announcementsQ.refetch();
+      setTimeout(() => setAnnStatusMsg(null), 4000);
+    },
+    onError: (err: any) => {
+      setAnnStatusMsg({ type: "error", text: `Failed to create announcement: ${err?.message || "Unknown error"}` });
+      setTimeout(() => setAnnStatusMsg(null), 6000);
     },
   });
 
   const togglePublishMut = useMutation({
-    mutationFn: (data: { id: string; published: boolean }) => togglePublishFn({ data }),
-    onSuccess: () => announcementsQ.refetch(),
+    mutationFn: (data: { id: string; published: boolean }) => {
+      setActionAnnId(data.id);
+      return togglePublishFn({ data });
+    },
+    onSuccess: (_, vars) => {
+      setAnnStatusMsg({
+        type: "success",
+        text: `Announcement ${vars.published ? "published live" : "unpublished to draft"} successfully!`,
+      });
+      announcementsQ.refetch();
+      setTimeout(() => setAnnStatusMsg(null), 4000);
+    },
+    onError: (err: any) => {
+      setAnnStatusMsg({ type: "error", text: `Failed to update announcement status: ${err?.message || "Unknown error"}` });
+      setTimeout(() => setAnnStatusMsg(null), 6000);
+    },
+    onSettled: () => setActionAnnId(null),
   });
 
   const deleteAnnMut = useMutation({
-    mutationFn: (data: { id: string }) => deleteAnnFn({ data }),
-    onSuccess: () => announcementsQ.refetch(),
+    mutationFn: (data: { id: string }) => {
+      setActionAnnId(data.id);
+      return deleteAnnFn({ data });
+    },
+    onSuccess: () => {
+      setAnnStatusMsg({ type: "success", text: "Announcement deleted permanently." });
+      announcementsQ.refetch();
+      setTimeout(() => setAnnStatusMsg(null), 4000);
+    },
+    onError: (err: any) => {
+      setAnnStatusMsg({ type: "error", text: `Failed to delete announcement: ${err?.message || "Unknown error"}` });
+      setTimeout(() => setAnnStatusMsg(null), 6000);
+    },
+    onSettled: () => setActionAnnId(null),
   });
 
   // ── Autosave team name ──
@@ -1616,6 +1651,20 @@ function AdminDashboard() {
                 </span>
               </div>
 
+              {/* Status Message Banner */}
+              {annStatusMsg && (
+                <div
+                  className={`rounded-xl px-4 py-2.5 text-xs font-medium border transition ${
+                    annStatusMsg.type === "success"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.15)]"
+                      : "border-rose-500/30 bg-rose-500/10 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.15)]"
+                  }`}
+                >
+                  <span className="mr-1.5">{annStatusMsg.type === "success" ? "✓" : "⚠️"}</span>
+                  {annStatusMsg.text}
+                </div>
+              )}
+
               {/* Create Announcement Form */}
               <form
                 onSubmit={(e) => {
@@ -1703,10 +1752,10 @@ function AdminDashboard() {
 
                   <button
                     type="submit"
-                    disabled={annCreating || !newAnnTitle.trim() || !newAnnContent.trim()}
-                    className="rounded-lg bg-amber-300 px-5 py-2 text-xs font-bold text-black hover:bg-amber-200 transition shadow-[0_0_15px_rgba(251,191,36,0.25)] disabled:opacity-40"
+                    disabled={annCreating || createAnnMut.isPending || !newAnnTitle.trim() || !newAnnContent.trim()}
+                    className="rounded-lg bg-amber-300 px-5 py-2 text-xs font-bold text-black hover:bg-amber-200 transition shadow-[0_0_15px_rgba(251,191,36,0.25)] disabled:opacity-40 cursor-pointer"
                   >
-                    {annCreating ? "Publishing…" : "Publish Announcement →"}
+                    {annCreating || createAnnMut.isPending ? "Publishing…" : "Publish Announcement →"}
                   </button>
                 </div>
               </form>
@@ -1769,27 +1818,33 @@ function AdminDashboard() {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
+                          disabled={actionAnnId === ann.id || togglePublishMut.isPending}
                           onClick={() =>
                             togglePublishMut.mutate({ id: ann.id, published: !ann.published })
                           }
-                          className={`rounded border px-2.5 py-1 text-[11px] font-medium transition ${
+                          className={`rounded border px-2.5 py-1 text-[11px] font-medium transition disabled:opacity-40 cursor-pointer ${
                             ann.published
                               ? "border-amber-300/30 bg-amber-300/10 text-amber-300 hover:bg-amber-300/20"
                               : "border-emerald-400/30 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20"
                           }`}
                         >
-                          {ann.published ? "Unpublish" : "Publish"}
+                          {actionAnnId === ann.id && togglePublishMut.isPending
+                            ? "Updating…"
+                            : ann.published
+                            ? "Unpublish"
+                            : "Publish"}
                         </button>
                         <button
                           type="button"
+                          disabled={actionAnnId === ann.id || deleteAnnMut.isPending}
                           onClick={() => {
-                            if (confirm(`Delete announcement "${ann.title}"?`)) {
+                            if (confirm(`Are you sure you want to permanently delete announcement "${ann.title}"?`)) {
                               deleteAnnMut.mutate({ id: ann.id });
                             }
                           }}
-                          className="rounded border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/20"
+                          className="rounded border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/20 disabled:opacity-40 cursor-pointer"
                         >
-                          Delete
+                          {actionAnnId === ann.id && deleteAnnMut.isPending ? "Deleting…" : "Delete"}
                         </button>
                       </div>
                     </div>

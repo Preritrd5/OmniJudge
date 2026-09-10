@@ -1063,14 +1063,28 @@ export const getStudentNotifications = createServerFn({ method: "POST" })
       }
     }
     const { getNotificationsForTeam } = await import("@/lib/notifications.server");
-    return { notifications: getNotificationsForTeam(data.teamId) };
+    return { notifications: await getNotificationsForTeam(data.teamId) };
   });
 
 export const markNotificationRead = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ id: z.string() }).parse(d))
+  .inputValidator((d) =>
+    z.object({
+      id: z.string(),
+      teamId: z.string().optional(),
+      sessionToken: z.string().optional(),
+    }).parse(d),
+  )
   .handler(async ({ data }) => {
+    let verifiedTeamId = data.teamId;
+    if (data.sessionToken) {
+      const { verifyTeamSessionToken } = await import("@/lib/team-token.server");
+      const v = verifyTeamSessionToken(data.sessionToken);
+      if (v.valid && v.payload?.teamId) {
+        verifiedTeamId = v.payload.teamId;
+      }
+    }
     const { markNotificationAsRead } = await import("@/lib/notifications.server");
-    const updated = markNotificationAsRead(data.id);
+    const updated = await markNotificationAsRead(data.id, verifiedTeamId);
     return { ok: true, notification: updated };
   });
 
@@ -1090,7 +1104,7 @@ export const markAllNotificationsRead = createServerFn({ method: "POST" })
       }
     }
     const { markAllNotificationsAsRead } = await import("@/lib/notifications.server");
-    const count = markAllNotificationsAsRead(data.teamId);
+    const count = await markAllNotificationsAsRead(data.teamId);
     return { ok: true, count };
   });
 
@@ -1099,7 +1113,7 @@ export const markAllNotificationsRead = createServerFn({ method: "POST" })
 export const getStudentAnnouncements = createServerFn({ method: "GET" })
   .handler(async () => {
     const { getPublishedAnnouncements } = await import("@/lib/announcements.server");
-    return { announcements: getPublishedAnnouncements() };
+    return { announcements: await getPublishedAnnouncements() };
   });
 
 export const getAdminAnnouncements = createServerFn({ method: "GET" })
@@ -1107,7 +1121,7 @@ export const getAdminAnnouncements = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await assertAdmin(context.userId);
     const { getAllAnnouncements } = await import("@/lib/announcements.server");
-    return { announcements: getAllAnnouncements() };
+    return { announcements: await getAllAnnouncements() };
   });
 
 export const createAnnouncementFn = createServerFn({ method: "POST" })
@@ -1124,7 +1138,7 @@ export const createAnnouncementFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { createAnnouncement } = await import("@/lib/announcements.server");
-    const created = createAnnouncement({
+    const created = await createAnnouncement({
       title: data.title,
       content: data.content,
       author: "SIH Premier Committee",
@@ -1146,7 +1160,7 @@ export const togglePublishAnnouncementFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { togglePublishAnnouncement } = await import("@/lib/announcements.server");
-    const updated = togglePublishAnnouncement(data.id, data.published);
+    const updated = await togglePublishAnnouncement(data.id, data.published);
     return { ok: true, announcement: updated };
   });
 
@@ -1156,7 +1170,7 @@ export const deleteAnnouncementFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { deleteAnnouncement } = await import("@/lib/announcements.server");
-    const ok = deleteAnnouncement(data.id);
+    const ok = await deleteAnnouncement(data.id);
     return { ok };
   });
 
