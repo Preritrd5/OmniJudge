@@ -47,9 +47,9 @@ function Landing() {
           </div>
         </div>
         <nav className="flex items-center gap-2">
-          <Link to="/team" className="rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-amber-300 hover:bg-amber-300/20 transition">
+          {/* <Link to="/team" className="rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-amber-300 hover:bg-amber-300/20 transition">
             Sign In
-          </Link>
+          </Link> */}
           {/* <Link to="/auth" className="rounded-full border border-purple-400/30 bg-purple-950/40 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-purple-200 hover:bg-purple-900/40 transition">
             👑 Admin Login
           </Link> */}
