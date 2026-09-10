@@ -1,5 +1,42 @@
 [
   {
+    "id": "notif_1789031690744_m2w48g",
+    "recipientTeamId": "all",
+    "title": "📢 Announcement: gnk",
+    "message": "mgbm",
+    "type": "ADMIN_ANNOUNCEMENT_PUBLISHED",
+    "isRead": false,
+    "read": false,
+    "readByTeamIds": [],
+    "createdAt": "2026-09-10T09:14:50.744Z"
+  },
+  {
+    "id": "notif_1789022521617_1j2oqx",
+    "recipientTeamId": "all",
+    "title": "📢 Announcement: Hello!!!! 👋 Welcome to INNOVEDGE SIH Premier 2026.....",
+    "message": "🎉 Hello everyone, and a warm welcome to INNOVEDGE SIH Premier !!!! We are delighted to have all participating te...",
+    "type": "ADMIN_ANNOUNCEMENT_PUBLISHED",
+    "isRead": false,
+    "read": false,
+    "readByTeamIds": [
+      "c8304d04-cd7c-4817-afe8-7345949aded9"
+    ],
+    "createdAt": "2026-09-10T06:42:01.617Z"
+  },
+  {
+    "id": "notif_1789022290120_2ym29u",
+    "recipientTeamId": "all",
+    "title": "📢 Announcement: hi",
+    "message": "hi",
+    "type": "ADMIN_ANNOUNCEMENT_PUBLISHED",
+    "isRead": true,
+    "read": true,
+    "readByTeamIds": [
+      "c8304d04-cd7c-4817-afe8-7345949aded9"
+    ],
+    "createdAt": "2026-09-10T06:38:10.120Z"
+  },
+  {
     "id": "notif_1789019351581_fycft4",
     "recipientTeamId": "all",
     "title": "Isolation Test Alert 1789019351384",
@@ -9,7 +46,8 @@
     "read": false,
     "readByTeamIds": [
       "3ec44e7c-acce-4fbc-8f7f-a2d6deefafd4",
-      "4bc6a951-6635-4b37-9559-bc5c82fa68fd"
+      "4bc6a951-6635-4b37-9559-bc5c82fa68fd",
+      "c8304d04-cd7c-4817-afe8-7345949aded9"
     ],
     "createdAt": "2026-09-10T05:49:11.581Z"
   },
@@ -19,10 +57,11 @@
     "title": "📢 Announcement: Test Notice 1789019341734",
     "message": "This is an automated end-to-end test announcement for SIH .",
     "type": "ADMIN_ANNOUNCEMENT_PUBLISHED",
-    "isRead": false,
-    "read": false,
+    "isRead": true,
+    "read": true,
     "readByTeamIds": [
-      "4bc6a951-6635-4b37-9559-bc5c82fa68fd"
+      "4bc6a951-6635-4b37-9559-bc5c82fa68fd",
+      "c8304d04-cd7c-4817-afe8-7345949aded9"
     ],
     "createdAt": "2026-09-10T05:49:05.838Z"
   }

@@ -7,21 +7,24 @@ export interface AppNotification {
   title: string;
   message: string;
   type:
-    | "PDF_UPLOAD_SUCCESS"
-    | "SUBMISSION_RECEIVED"
-    | "EVALUATION_STARTED"
-    | "AI_EVALUATION_COMPLETED"
-    | "TEACHER_EVALUATION_UPDATED"
-    | "F7_UPDATED"
-    | "F8_UPDATED"
-    | "COMBINED_RESULT_UPDATED"
     | "ADMIN_ANNOUNCEMENT_PUBLISHED"
-    | "GENERAL_UPDATE";
+    | "ADMIN_BROADCAST"
+    | "GENERAL_UPDATE"
+    | "RESULTS_DECLARED"
+    | string;
   isRead: boolean;
   read?: boolean;
   readByTeamIds?: string[];
   createdAt: string;
 }
+
+// Only official updates & announcements created by admin are displayed as notifications
+export const ALLOWED_ADMIN_NOTIFICATION_TYPES = new Set([
+  "ADMIN_ANNOUNCEMENT_PUBLISHED",
+  "ADMIN_BROADCAST",
+  "GENERAL_UPDATE",
+  "RESULTS_DECLARED",
+]);
 
 const NOTIFICATIONS_STORE_PATH = path.resolve(process.cwd(), "notifications-store.json");
 const STORAGE_BUCKET = "app_state";
@@ -154,7 +157,12 @@ export async function createNotification(params: {
   title: string;
   message: string;
   type: AppNotification["type"];
-}): Promise<AppNotification> {
+}): Promise<AppNotification | null> {
+  // Only official announcements & updates created by admin are allowed
+  if (!ALLOWED_ADMIN_NOTIFICATION_TYPES.has(params.type)) {
+    return null;
+  }
+
   const all = await readNotificationsStore(true);
   
   // Prevent duplicate notifications within 15 seconds
@@ -210,8 +218,13 @@ export async function emitNotification(params: {
 
 export async function getNotificationsForTeam(teamId: string): Promise<AppNotification[]> {
   const all = await readNotificationsStore();
+  // Filter strictly for admin announcements and official broadcasts (no automated PDF/evaluation spam)
   return all
-    .filter((n) => n.recipientTeamId === teamId || n.recipientTeamId === "all")
+    .filter(
+      (n) =>
+        (n.recipientTeamId === teamId || n.recipientTeamId === "all") &&
+        ALLOWED_ADMIN_NOTIFICATION_TYPES.has(n.type)
+    )
     .map((n) => {
       // If notification is broadcast to all teams, check if this specific team has read it
       let isRead = false;

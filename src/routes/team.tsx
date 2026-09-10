@@ -22,6 +22,7 @@ import {
   clearTeamTabSession,
   purgeLegacyLocalStorage,
 } from "@/lib/team-session";
+import { PublicNavAnnouncements } from "@/components/PublicNavAnnouncements";
 
 export const Route = createFileRoute("/team")({
   head: () => ({
@@ -166,10 +167,22 @@ function TeamPortal() {
     setNotifications([]);
     setUploadDone(null);
     setFile(null);
+    setUploadError(null);
     setActiveSubmittingProposal(null);
     setLoginTeamName("");
     setLoginEmail("");
     setLoginError(null);
+
+    // Reset requirements form to a completely clean, blank state for the next user
+    setSelectedTopic("");
+    setProjectTitle("");
+    setProjectDescription("");
+    setLeaderPhone("");
+    setMembers([]);
+    setNewMemberName("");
+    setNewMemberRole("");
+    setReqSaveSuccess(false);
+    setReqSaveLoading(false);
   };
 
   useEffect(() => {
@@ -288,12 +301,13 @@ function TeamPortal() {
           loadNotifications(res.team.id, res.sessionToken || activeToken);
         }
         const p = (res.team.profile || {}) as any;
-        if (p.leaderName) setSessionLeaderName(p.leaderName);
-        if (p.category) setSelectedTopic(p.category);
-        if (p.projectTitle) setProjectTitle(p.projectTitle);
-        if (p.projectDescription) setProjectDescription(p.projectDescription);
-        if (p.leaderPhone) setLeaderPhone(p.leaderPhone);
-        if (Array.isArray(p.members)) {
+        // Unconditionally initialize all fields for THIS team; missing fields reset to blank space
+        setSessionLeaderName(p.leaderName || res.team.name || "Team Leader");
+        setSelectedTopic(p.category || "");
+        setProjectTitle(p.projectTitle || "");
+        setProjectDescription(p.projectDescription || "");
+        setLeaderPhone(p.leaderPhone || "");
+        if (Array.isArray(p.members) && p.members.length > 0) {
           setMembers(
             p.members.map((m: any, idx: number) => {
               if (typeof m === "string") {
@@ -303,6 +317,8 @@ function TeamPortal() {
               return { id: String(idx), name: m.name || "", role: m.role || "Core Member" };
             })
           );
+        } else {
+          setMembers([]);
         }
       }
     } catch (e: any) {
@@ -318,6 +334,19 @@ function TeamPortal() {
     e.preventDefault();
     setLoginError(null);
     setLoginLoading(true);
+
+    // Immediate clean slate reset before loading new team workspace
+    setSelectedTopic("");
+    setProjectTitle("");
+    setProjectDescription("");
+    setLeaderPhone("");
+    setMembers([]);
+    setNewMemberName("");
+    setNewMemberRole("");
+    setUploadDone(null);
+    setUploadError(null);
+    setFile(null);
+    setActiveSubmittingProposal(null);
 
     try {
       const email = loginEmail.trim().toLowerCase();
@@ -516,12 +545,7 @@ function TeamPortal() {
           </div>
         </Link>
         <div className="flex items-center gap-3">
-          {/* <Link
-            to="/auth"
-            className="rounded-lg border border-purple-400/30 bg-purple-950/40 px-3 py-1.5 text-xs font-semibold text-purple-200 hover:bg-purple-900/50 transition"
-          >
-            👑 Admin Login
-          </Link> */}
+          <PublicNavAnnouncements />
           <ThemeToggle />
 
           {/* {sessionEmail && (
@@ -742,7 +766,7 @@ function TeamPortal() {
                 </p>
               </div>
 
-              <form onSubmit={handleSaveRequirements} className="space-y-4">
+              <form key={teamData?.id || "team-reqs"} onSubmit={handleSaveRequirements} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="text-[11px] font-medium uppercase tracking-wider text-slate-400">

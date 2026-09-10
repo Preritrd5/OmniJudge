@@ -867,33 +867,21 @@ export function generatePartwiseResultsReport(teams: TeamReportData[], categoryF
 // ─────────────────────────────────────────────────────────────────────────────
 export function generateAnnouncementReport(
   teams: TeamReportData[],
-  topics: TopicItem[] = []
+  _topics: TopicItem[] = []
 ): string {
-  const sorted = [...teams]
-    .filter((t) => t.bestScore != null)
-    .sort((a, b) => (b.bestScore ?? 0) - (a.bestScore ?? 0));
-
-  const firstPlace = sorted[0];
-  const secondPlace = sorted[1];
-  const thirdPlace = sorted[2];
-
-  // Category winners
-  const categoryWinners: Array<{ category: string; team: TeamReportData }> = [];
-  for (const topic of topics) {
-    const inTopic = sorted.filter(
-      (t) => t.latest?.category === topic.name || t.submissions.some((s) => s.category === topic.name)
-    );
-    if (inTopic.length > 0) {
-      categoryWinners.push({ category: topic.name, team: inTopic[0] });
+  const sorted = [...teams].sort((a, b) => {
+    if (a.bestScore != null && b.bestScore != null) {
+      return (b.bestScore ?? 0) - (a.bestScore ?? 0);
     }
-  }
+    return (a.name || "").localeCompare(b.name || "");
+  });
 
   return `
     <!DOCTYPE html>
     <html lang="en">
     <head>
       <meta charset="utf-8">
-      <title>SIH Premier 2026 — Official Declaration of Winners</title>
+      <title>SIH Premier 2026 — Official List of Qualified Teams</title>
       <style>${COMMON_CSS}</style>
     </head>
     <body>
@@ -903,98 +891,55 @@ export function generateAnnouncementReport(
           
           <div class="content-relative">
             <!-- Official Header -->
-            <div style="text-align:center;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:14px;">
+            <div style="text-align:center;border-bottom:2px solid #0f172a;padding-bottom:12px;margin-bottom:16px;">
               <img src="/logo.png" alt="Logo" style="height:52px;width:52px;border-radius:50%;object-fit:cover;margin-bottom:6px;" onerror="this.style.display='none'" />
               <div style="font-size:10px;font-weight:800;letter-spacing:3px;text-transform:uppercase;color:#d97706;" class="heading-font">SIH PREMIER 2026</div>
-              <h1 style="margin:2px 0 0;font-size:22px;font-weight:900;color:#0f172a;" class="heading-font">OFFICIAL DECLARATION OF WINNERS</h1>
+              <h1 style="margin:2px 0 0;font-size:22px;font-weight:900;color:#0f172a;" class="heading-font">OFFICIAL LIST OF QUALIFIED TEAMS</h1>
               <div style="font-size:11px;color:#64748b;margin-top:2px;">
-                Grand Finale Results & Track Champions · Declared on <b>${getFormattedDate()}</b>
+                Shortlist &amp; Qualification Announcement · Declared on <b>${getFormattedDate()}</b>
               </div>
             </div>
 
-            <!-- Grand Podium (Top 3 Winners) -->
+            <!-- Qualification Notice Banner -->
+            <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:4px solid #16a34a;border-radius:8px;padding:10px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <div style="font-size:11px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:0.8px;">
+                  ✓ Qualified Teams Declaration
+                </div>
+                <div style="font-size:10px;color:#334155;margin-top:2px;">
+                  The following teams have successfully qualified and shortlisted for the premier rounds.
+                </div>
+              </div>
+              <div style="text-align:right;">
+                <span style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-size:10px;font-weight:800;padding:3px 10px;border-radius:12px;">
+                  ${sorted.length} Teams Qualified
+                </span>
+              </div>
+            </div>
+
+            <!-- Full Qualified Teams Table -->
             <div style="margin-bottom:16px;">
-              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#0f172a;text-align:center;margin-bottom:8px;" class="heading-font">
-                🏆 GRAND CHAMPIONSHIP PODIUM
+              <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;margin-bottom:6px;" class="heading-font">
+                📜 Qualified Teams Roster
               </div>
-              
-              <div style="display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:10px;align-items:flex-end;">
-                
-                <!-- 2nd Place -->
-                <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:12px 10px;text-align:center;order:1;">
-                  <div style="font-size:26px;">🥈</div>
-                  <div style="font-size:10px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:1px;">1st Runner-Up</div>
-                  <div style="font-size:15px;font-weight:900;color:#0f172a;margin-top:3px;" class="heading-font">${secondPlace?.name || "TBA"}</div>
-                  <div style="font-size:10px;color:#64748b;">${secondPlace?.latest?.category || "—"}</div>
-                  <div style="font-size:16px;font-weight:900;color:#0284c7;margin-top:4px;" class="heading-font">${secondPlace?.bestScore ?? "—"}<span style="font-size:9px;color:#64748b;">/100</span></div>
-                </div>
-
-                <!-- 1st Place (Winner) -->
-                <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:10px;padding:16px 12px;text-align:center;box-shadow:0 6px 15px rgba(245,158,11,0.15);order:2;">
-                  <div style="font-size:32px;">🏆</div>
-                  <div style="font-size:11px;font-weight:900;color:#92400e;text-transform:uppercase;letter-spacing:1.5px;">Grand Champion</div>
-                  <div style="font-size:18px;font-weight:900;color:#78350f;margin-top:3px;" class="heading-font">${firstPlace?.name || "TBA"}</div>
-                  <div style="font-size:11px;color:#b45309;font-weight:600;">${firstPlace?.latest?.category || "All Track Winner"}</div>
-                  <div style="font-size:22px;font-weight:900;color:#b45309;margin-top:4px;" class="heading-font">${firstPlace?.bestScore ?? "—"}<span style="font-size:11px;color:#92400e;">/100</span></div>
-                </div>
-
-                <!-- 3rd Place -->
-                <div style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:8px;padding:12px 10px;text-align:center;order:3;">
-                  <div style="font-size:26px;">🥉</div>
-                  <div style="font-size:10px;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:1px;">2nd Runner-Up</div>
-                  <div style="font-size:15px;font-weight:900;color:#0f172a;margin-top:3px;" class="heading-font">${thirdPlace?.name || "TBA"}</div>
-                  <div style="font-size:10px;color:#64748b;">${thirdPlace?.latest?.category || "—"}</div>
-                  <div style="font-size:16px;font-weight:900;color:#0284c7;margin-top:4px;" class="heading-font">${thirdPlace?.bestScore ?? "—"}<span style="font-size:9px;color:#64748b;">/100</span></div>
-                </div>
-
-              </div>
-            </div>
-
-            <!-- Track / Category Champions -->
-            ${categoryWinners.length > 0 ? `
-              <div style="margin-bottom:14px;">
-                <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;margin-bottom:6px;" class="heading-font">
-                  🎖️ Track Champions (Partwise Category Leaders)
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:6px;">
-                  ${categoryWinners.map((cw) => `
-                    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:3px solid #d97706;border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;">
-                      <div>
-                        <div style="font-size:9.5px;font-weight:700;color:#d97706;text-transform:uppercase;">${cw.category}</div>
-                        <div style="font-size:12px;font-weight:800;color:#0f172a;">${cw.team.name}</div>
-                      </div>
-                      <div style="font-size:13px;font-weight:900;color:#0f172a;">
-                        ${cw.team.bestScore}<span style="font-size:8.5px;color:#64748b;">/100</span>
-                      </div>
-                    </div>
-                  `).join("")}
-                </div>
-              </div>
-            ` : ""}
-
-            <!-- Full Ranked Top 10 List -->
-            <div style="margin-bottom:14px;">
-              <div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#0f172a;margin-bottom:5px;" class="heading-font">
-                📜 Official Top Ranking Table
-              </div>
-              <table class="criteria-table" style="font-size:10.5px;">
+              <table class="criteria-table" style="font-size:11px;">
                 <thead>
                   <tr>
-                    <th style="width:30px;text-align:center;">#</th>
-                    <th>Team</th>
-                    <th>Team Leader Email</th>
-                    <th>Category</th>
-                    <th style="text-align:right;">Score</th>
+                    <th style="width:36px;text-align:center;">#</th>
+                    <th>Team Name</th>
+                    <th>Team Leader</th>
+                    <th>Track / Category</th>
+                    <th style="text-align:center;width:110px;">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${sorted.slice(0, 8).map((t, i) => `
+                  ${sorted.map((t, i) => `
                     <tr style="border-bottom:1px solid #f1f5f9;">
-                      <td style="text-align:center;font-weight:700;color:#475569;">${i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : i + 1}</td>
-                      <td style="font-weight:700;color:#0f172a;">${t.name}</td>
-                      <td style="color:#64748b;font-size:10px;">${t.leader_email || "—"}</td>
-                      <td style="font-size:10px;"><span class="badge badge-blue">${t.latest?.category || "General"}</span></td>
-                      <td style="text-align:right;font-weight:900;color:#d97706;">${t.bestScore}/100</td>
+                      <td style="text-align:center;font-weight:700;color:#64748b;">${i + 1}</td>
+                      <td style="font-weight:800;color:#0f172a;font-size:12px;">${t.name}</td>
+                      <td style="color:#0284c7;font-weight:600;font-size:10.5px;">${(t as any)?.leader_name || t.leader_email || "Team Leader"}</td>
+                      <td style="font-size:10px;"><span class="badge badge-blue">${t.latest?.category || (t as any)?.category || "General"}</span></td>
+                      <td style="text-align:center;"><span style="font-size:9.5px;font-weight:800;color:#15803d;background:#dcfce7;border:1px solid #86efac;padding:3px 8px;border-radius:10px;">✓ Qualified</span></td>
                     </tr>
                   `).join("")}
                 </tbody>

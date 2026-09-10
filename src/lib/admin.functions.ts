@@ -481,7 +481,6 @@ export const saveManualScoresFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { emitNotification } = await import("@/lib/notifications.server");
 
     const { data: sub, error } = await supabaseAdmin
       .from("submissions")
@@ -645,45 +644,6 @@ export const saveManualScoresFn = createServerFn({ method: "POST" })
 
     if (upErr) throw new Error(`Failed to update scores: ${upErr.message}`);
 
-    // Emit event notifications to team (messages are sanitized of numbers)
-    try {
-      if (sub.team_id) {
-        emitNotification({
-          teamId: sub.team_id,
-          type: "TEACHER_EVALUATION_UPDATED",
-          title: "Judge Evaluation Recorded",
-          message: `Manual jury evaluation updated by Judge 1 & Judge 2 for submission "${sub.file_name}".`,
-        });
-
-        if (data.scores?.["F7"] || data.teacher1Scores?.["F7"]) {
-          emitNotification({
-            teamId: sub.team_id,
-            type: "F7_UPDATED",
-            title: "Presentation Assessment Recorded",
-            message: `Presentation & Communication rubric verified by live judging panel.`,
-          });
-        }
-
-        if (data.scores?.["F8"] || data.teacher2Scores?.["F8"]) {
-          emitNotification({
-            teamId: sub.team_id,
-            type: "F8_UPDATED",
-            title: "Teamwork Assessment Recorded",
-            message: `Collaboration & Teamwork rubric verified by live judging panel.`,
-          });
-        }
-
-        emitNotification({
-          teamId: sub.team_id,
-          type: "COMBINED_RESULT_UPDATED",
-          title: "Evaluation Finalized",
-          message: `Hybrid evaluation successfully consolidated for "${sub.file_name}".`,
-        });
-      }
-    } catch (notifErr) {
-      console.warn("[saveManualScores] Failed to emit notifications:", notifErr);
-    }
-
     return {
       ok: true,
       totalScore: combinedScore,
@@ -831,7 +791,7 @@ export const updateTeamRequirements = createServerFn({ method: "POST" })
     // Authoritative verification: Check that leaderEmail owns teamId
     const { data: teamRow } = await supabaseAdmin
       .from("teams")
-      .select("id, leader_email")
+      .select("id, name, leader_email")
       .eq("id", data.teamId)
       .maybeSingle();
 
@@ -844,14 +804,14 @@ export const updateTeamRequirements = createServerFn({ method: "POST" })
 
     saveTeamProfile({
       teamId: data.teamId,
-      teamName: current?.teamName || "",
-      leaderName: current?.leaderName || "",
+      teamName: current?.teamName || teamRow?.name || "",
+      leaderName: current?.leaderName || teamRow?.name || "Team Leader",
       leaderEmail: data.leaderEmail,
-      leaderPhone: data.leaderPhone !== undefined ? data.leaderPhone : current?.leaderPhone,
-      category: data.category !== undefined ? data.category : current?.category,
-      projectTitle: data.projectTitle !== undefined ? data.projectTitle : current?.projectTitle,
-      projectDescription: data.projectDescription !== undefined ? data.projectDescription : current?.projectDescription,
-      members: data.members !== undefined ? data.members : current?.members,
+      leaderPhone: data.leaderPhone !== undefined ? data.leaderPhone : (current?.leaderPhone || ""),
+      category: data.category !== undefined ? data.category : (current?.category || ""),
+      projectTitle: data.projectTitle !== undefined ? data.projectTitle : (current?.projectTitle || ""),
+      projectDescription: data.projectDescription !== undefined ? data.projectDescription : (current?.projectDescription || ""),
+      members: data.members !== undefined ? data.members : (current?.members || []),
       createdAt: current?.createdAt || new Date().toISOString(),
     });
 
@@ -1036,8 +996,13 @@ export const getTeamDashboard = createServerFn({ method: "POST" })
         profile: profile || {
           teamId: teamRecord.id,
           teamName: teamRecord.name,
-          leaderName: "Team Leader",
+          leaderName: teamRecord.name || "Team Leader",
           leaderEmail: teamRecord.leader_email || data.email,
+          category: "",
+          projectTitle: "",
+          projectDescription: "",
+          leaderPhone: "",
+          members: [],
           createdAt: teamRecord.created_at,
         },
         submissions: safeSubmissions,
@@ -1261,4 +1226,101 @@ export const reEvaluateSubmissionFn = createServerFn({ method: "POST" })
       .eq("id", sub.id);
 
     return { success: true, score: combinedScore };
+  });
+
+// ─── Results Declaration Functions ──────────────────────────────────────────
+
+export const getPublicResultsData = createServerFn({ method: "GET" })
+  .handler(async () => {
+    const { fetchPublicResultsData } = await import("@/lib/results-declaration.server");
+    return await fetchPublicResultsData();
+  });
+
+export const getAdminResultsDeclaration = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await assertAdmin(context.userId);
+    const { getResultsDeclaration } = await import("@/lib/results-declaration.server");
+    return { declaration: await getResultsDeclaration() };
+  });
+
+export const updateResultsDeclarationFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      qualifiedTeamIds: z.array(z.string()).optional(),
+      excludedTeamIds: z.array(z.string()).optional(),
+      published: z.boolean().optional(),
+      customNote: z.string().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { saveResultsDeclaration } = await import("@/lib/results-declaration.server");
+    const updated = await saveResultsDeclaration(data);
+    return { ok: true, declaration: updated };
+  });
+
+export const publishResultsAnnouncementFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      title: z.string().optional(),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context.userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { getResultsDeclaration, saveResultsDeclaration } = await import("@/lib/results-declaration.server");
+    const { createAnnouncement } = await import("@/lib/announcements.server");
+
+    const declaration = await getResultsDeclaration();
+    const hasExplicitQualified = Array.isArray(declaration.qualifiedTeamIds);
+    const qualifiedSet = hasExplicitQualified ? new Set(declaration.qualifiedTeamIds) : null;
+    const excludedSet = new Set(declaration.excludedTeamIds || []);
+
+    const [teamsRes, subsRes] = await Promise.all([
+      supabaseAdmin.from("teams").select("id, name"),
+      supabaseAdmin.from("submissions").select("id, team_id, score, category"),
+    ]);
+
+    const qualifiedTeams = (teamsRes.data || [])
+      .map((t) => {
+        const teamSubs = (subsRes.data || []).filter((s) => s.team_id === t.id);
+        const best = teamSubs.reduce<number | null>(
+          (acc, s) => (s.score != null && (acc == null || s.score > acc) ? s.score : acc),
+          null,
+        );
+        const category = teamSubs.find((s) => s.category)?.category || "General";
+        return { id: t.id, name: t.name, bestScore: best, category };
+      })
+      .filter((t) => {
+        if (hasExplicitQualified) return qualifiedSet!.has(t.id);
+        return t.bestScore != null && !excludedSet.has(t.id);
+      })
+      .sort((a, b) => (b.bestScore ?? 0) - (a.bestScore ?? 0));
+
+    const title = data.title?.trim() || "📜 Official List of Qualified Teams Announced";
+    const content = [
+      "The official list of qualified teams for SIH Premier 2026 has been declared by the Organizing Committee.",
+      "",
+      `Total Qualified Teams: ${qualifiedTeams.length}.`,
+      "All participants and visitors can view the complete list of qualified teams from the Notification Center in the top navigation bar.",
+    ].join("\n");
+
+    const ann = await createAnnouncement({
+      title,
+      content,
+      author: "SIH Premier Committee",
+      priority: "urgent",
+      pinned: true,
+      publishImmediately: true,
+    });
+
+    await saveResultsDeclaration({
+      published: true,
+      publishedAt: new Date().toISOString(),
+    });
+
+    return { ok: true, announcement: ann };
   });

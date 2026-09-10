@@ -90,8 +90,6 @@ export const Route = createFileRoute("/api/public/submit")({
             console.warn("[submit] Failed to update profile store:", profileErr);
           }
 
-          const { emitNotification } = await import("@/lib/notifications.server");
-
           // Upload PDF
           const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(0, 120);
           const path = `${teamId}/${Date.now()}-${safeName}`;
@@ -101,16 +99,6 @@ export const Route = createFileRoute("/api/public/submit")({
             .upload(path, buf, { contentType: "application/pdf", upsert: false });
           if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
 
-          // Emit upload success notification
-          try {
-            emitNotification({
-              teamId,
-              type: "PDF_UPLOAD_SUCCESS",
-              title: "Proposal PDF Uploaded",
-              message: `Proposal deck "${file.name}" uploaded successfully and verified.`,
-            });
-          } catch {}
-
           // Create submission row
           const { data: sub, error: subErr } = await supabaseAdmin
             .from("submissions")
@@ -118,16 +106,6 @@ export const Route = createFileRoute("/api/public/submit")({
             .select("id")
             .single();
           if (subErr) throw subErr;
-
-          // Emit submission received notification
-          try {
-            emitNotification({
-              teamId,
-              type: "SUBMISSION_RECEIVED",
-              title: "Submission Received",
-              message: `Proposal received for team "${teamName}". Queued for evaluation.`,
-            });
-          } catch {}
 
           // Evaluate in the background asynchronously
           const base64 = Buffer.from(buf).toString("base64");
@@ -139,15 +117,6 @@ export const Route = createFileRoute("/api/public/submit")({
                 .from("submissions")
                 .update({ status: "evaluating" })
                 .eq("id", sub.id);
-
-              try {
-                emitNotification({
-                  teamId,
-                  type: "EVALUATION_STARTED",
-                  title: "Evaluation In Progress",
-                  message: `Automated assessment started for "${file.name}".`,
-                });
-              } catch {}
 
               const { evaluatePdf } = await import("@/lib/evaluation.server");
               const rawResult = await evaluatePdf(base64, file.name, category);
@@ -251,15 +220,6 @@ export const Route = createFileRoute("/api/public/submit")({
                 .from("submissions")
                 .update({ status: "done", score: combinedScore, result: enrichedResult })
                 .eq("id", sub.id);
-
-              try {
-                emitNotification({
-                  teamId,
-                  type: "AI_EVALUATION_COMPLETED",
-                  title: "AI Evaluation Finished",
-                  message: `AI criteria assessment completed for "${file.name}".`,
-                });
-              } catch {}
             } catch (evalErr: any) {
               const msg = evalErr?.message || "Evaluation failed";
               console.error("[background-eval]", evalErr);

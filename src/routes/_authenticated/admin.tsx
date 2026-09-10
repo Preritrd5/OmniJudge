@@ -24,6 +24,9 @@ import {
   togglePublishAnnouncementFn,
   deleteAnnouncementFn,
   registerTeamLeader,
+  getAdminResultsDeclaration,
+  updateResultsDeclarationFn,
+  publishResultsAnnouncementFn,
 } from "@/lib/admin.functions";
 import {
   generateTeamReport1Page,
@@ -132,6 +135,9 @@ function AdminDashboard() {
   const togglePublishFn = useServerFn(togglePublishAnnouncementFn);
   const deleteAnnFn = useServerFn(deleteAnnouncementFn);
   const adminCreateTeamFn = useServerFn(registerTeamLeader);
+  const getResultsDeclarationServerFn = useServerFn(getAdminResultsDeclaration);
+  const updateResultsDeclarationServerFn = useServerFn(updateResultsDeclarationFn);
+  const publishResultsAnnouncementServerFn = useServerFn(publishResultsAnnouncementFn);
 
   // Add Team Modal state
   const [showAddTeamModal, setShowAddTeamModal] = useState(false);
@@ -312,6 +318,11 @@ function AdminDashboard() {
     queryFn: () => getAnnouncementsFn(),
   });
 
+  const resultsDeclarationQ = useQuery({
+    queryKey: ["admin", "results_declaration"],
+    queryFn: () => getResultsDeclarationServerFn(),
+  });
+
   // Announcement management state
   const [newAnnTitle, setNewAnnTitle] = useState("");
   const [newAnnContent, setNewAnnContent] = useState("");
@@ -474,6 +485,71 @@ function AdminDashboard() {
     onSettled: () => setActionAnnId(null),
   });
 
+  const teams = teamsQ.data || [];
+  const rawQualifiedIds: string[] | undefined = resultsDeclarationQ.data?.declaration?.qualifiedTeamIds;
+  const excludedTeamIds: string[] = resultsDeclarationQ.data?.declaration?.excludedTeamIds || [];
+
+  // Determine currently qualified teams
+  const qualifiedTeamIds: string[] = useMemo(() => {
+    if (Array.isArray(rawQualifiedIds)) {
+      return rawQualifiedIds;
+    }
+    return teams
+      .filter((t) => t.bestScore != null && !excludedTeamIds.includes(t.id))
+      .map((t) => t.id);
+  }, [rawQualifiedIds, excludedTeamIds, teams]);
+
+  const updateDeclarationMut = useMutation({
+    mutationFn: (data: { qualifiedTeamIds?: string[]; excludedTeamIds?: string[]; published?: boolean }) =>
+      updateResultsDeclarationServerFn({ data }),
+    onSuccess: () => {
+      resultsDeclarationQ.refetch();
+      setAnnStatusMsg({ type: "success", text: "Qualified teams list updated successfully!" });
+      setTimeout(() => setAnnStatusMsg(null), 4000);
+    },
+    onError: (err: any) => {
+      setAnnStatusMsg({ type: "error", text: `Failed to update qualified list: ${err?.message || "Unknown error"}` });
+      setTimeout(() => setAnnStatusMsg(null), 5000);
+    },
+  });
+
+  const publishResultsNoticeMut = useMutation({
+    mutationFn: (data: { title?: string }) =>
+      publishResultsAnnouncementServerFn({ data }),
+    onSuccess: () => {
+      announcementsQ.refetch();
+      resultsDeclarationQ.refetch();
+      setAnnStatusMsg({ type: "success", text: "Official Qualified Teams notice broadcasted to all portals!" });
+      setTimeout(() => setAnnStatusMsg(null), 5000);
+    },
+    onError: (err: any) => {
+      setAnnStatusMsg({ type: "error", text: `Failed to broadcast notice: ${err?.message || "Unknown error"}` });
+      setTimeout(() => setAnnStatusMsg(null), 5000);
+    },
+  });
+
+  const handleToggleQualified = (teamId: string) => {
+    const isQual = qualifiedTeamIds.includes(teamId);
+    const updated = isQual
+      ? qualifiedTeamIds.filter((id) => id !== teamId)
+      : [...qualifiedTeamIds, teamId];
+    updateDeclarationMut.mutate({ qualifiedTeamIds: updated });
+  };
+
+  const handleQualifyAllEvaluated = () => {
+    const allScoredIds = teams.filter((t) => t.bestScore != null).map((t) => t.id);
+    updateDeclarationMut.mutate({ qualifiedTeamIds: allScoredIds });
+  };
+
+  const handleQualifyAboveScore = (threshold = 50) => {
+    const passedIds = teams.filter((t) => t.bestScore != null && t.bestScore >= threshold).map((t) => t.id);
+    updateDeclarationMut.mutate({ qualifiedTeamIds: passedIds });
+  };
+
+  const handleClearAllQualified = () => {
+    updateDeclarationMut.mutate({ qualifiedTeamIds: [] });
+  };
+
   // ── Autosave team name ──
   useEffect(() => {
     if (!editingTeam) return;
@@ -555,8 +631,6 @@ function AdminDashboard() {
     navigate({ to: "/auth" });
   };
 
-  const teams = teamsQ.data || [];
-
   // Filter teams by category and search query
   const filteredTeams = useMemo(() => {
     return teams.filter((t) => {
@@ -577,6 +651,19 @@ function AdminDashboard() {
       .filter((t) => t.bestScore != null)
       .sort((a, b) => (b.bestScore ?? 0) - (a.bestScore ?? 0));
   }, [filteredTeams]);
+
+  // Curated qualified teams (selected by admin)
+  const curatedTeams = useMemo(() => {
+    return teams
+      .filter((t) => qualifiedTeamIds.includes(t.id))
+      .sort((a, b) => (b.bestScore ?? 0) - (a.bestScore ?? 0));
+  }, [teams, qualifiedTeamIds]);
+
+  const allScoredTeams = useMemo(() => {
+    return teams
+      .filter((t) => t.bestScore != null)
+      .sort((a, b) => (b.bestScore ?? 0) - (a.bestScore ?? 0));
+  }, [teams]);
 
   // Grouped results partwise / category-wise
   const partwiseGrouped = useMemo(() => {
@@ -1537,101 +1624,176 @@ function AdminDashboard() {
           </section>
         )}
 
-        {/* ─── TAB 3: ANNOUNCE LIST & PODIUM ────────────────────────────────────── */}
+        {/* ─── TAB 3: QUALIFIED TEAMS SELECTION & ANNOUNCEMENTS ──────────────────── */}
         {activeTab === "announcements" && (
           <section className="space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <h2 className="font-serif text-2xl">Official Announcement List &amp; Podium</h2>
+                <h2 className="font-serif text-2xl">Qualified Teams Selection &amp; Notices</h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Grand championship winners, track champions, and 1-click official declaration PDF.
+                  Select which teams are qualified. Users can view only qualified team names and leader names in the top navbar notification drawer (no scores/marks are shown to users).
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <button
-                  onClick={() => openPdfWindow(generateAnnouncementReport(teams, localTopics))}
-                  className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-5 py-2.5 text-xs font-bold text-black hover:bg-amber-200 shadow-[0_0_20px_rgba(251,191,36,0.35)]"
+                  onClick={() => openPdfWindow(generateAnnouncementReport(curatedTeams, localTopics))}
+                  disabled={!curatedTeams.length}
+                  className="inline-flex items-center gap-2 rounded-xl bg-amber-300 px-5 py-2.5 text-xs font-bold text-black hover:bg-amber-200 shadow-[0_0_20px_rgba(251,191,36,0.35)] disabled:opacity-50 cursor-pointer transition"
                 >
-                  <span>🏆</span> Print 1-Page Official Announcement PDF
+                  <span>📜</span> Print 1-Page Qualified Teams PDF ({curatedTeams.length})
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm("Broadcast official Qualified Teams notice to all student & team portals now?")) {
+                      publishResultsNoticeMut.mutate({});
+                    }
+                  }}
+                  disabled={publishResultsNoticeMut.isPending || !curatedTeams.length}
+                  className="inline-flex items-center gap-2 rounded-xl border border-amber-300/40 bg-amber-400/10 px-4 py-2.5 text-xs font-bold text-amber-300 hover:bg-amber-400/20 transition disabled:opacity-50 cursor-pointer"
+                >
+                  <span>📢</span> {publishResultsNoticeMut.isPending ? "Broadcasting…" : "Broadcast Qualified Notice"}
                 </button>
               </div>
             </div>
 
-            {/* Grand Championship Podium */}
-            <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-transparent p-6 backdrop-blur-md">
-              <div className="text-center mb-6">
-                <span className="text-[10px] uppercase tracking-[0.3em] text-amber-300 font-bold">Official Declaration</span>
-                <h3 className="font-serif text-2xl sm:text-3xl mt-1">Grand Championship Winners</h3>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-3 items-end max-w-4xl mx-auto">
-                {/* 2nd Place */}
-                <div className="rounded-2xl border border-slate-700 bg-white/[0.02] p-5 text-center order-2 sm:order-1">
-                  <div className="text-4xl">🥈</div>
-                  <div className="mt-2 text-[10px] uppercase tracking-wider text-slate-400 font-bold">1st Runner-Up</div>
-                  <div className="mt-1 font-serif text-xl font-bold text-slate-100">
-                    {leaderboard[1]?.name || "To Be Announced"}
-                  </div>
-                  <div className="text-xs text-amber-300/80 mt-1">{leaderboard[1]?.latest?.category || "—"}</div>
-                  <div className="mt-3 font-serif text-2xl font-black text-sky-400">
-                    {leaderboard[1]?.bestScore ?? "—"}<span className="text-xs text-slate-500">/100</span>
-                  </div>
+            {/* ── Qualified Teams Selector & Manager ── */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur-md space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
+                <div>
+                  <h3 className="font-serif text-xl font-bold text-slate-100 flex items-center gap-2">
+                    <span>✓</span> Select Qualified Teams
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Toggle which teams qualify. Teams with low scores can easily be removed with one click. Only qualified teams will appear in public notifications and the official PDF.
+                  </p>
                 </div>
 
-                {/* 1st Place */}
-                <div className="rounded-2xl border-2 border-amber-300/70 bg-gradient-to-b from-amber-300/15 to-transparent p-6 text-center order-1 sm:order-2 shadow-[0_0_40px_rgba(251,191,36,0.2)]">
-                  <div className="text-5xl">🏆</div>
-                  <div className="mt-2 text-[11px] uppercase tracking-[0.2em] text-amber-300 font-black">
-                    Grand Champion (1st Place)
-                  </div>
-                  <div className="mt-1 font-serif text-2xl sm:text-3xl font-black text-slate-100">
-                    {leaderboard[0]?.name || "To Be Announced"}
-                  </div>
-                  <div className="text-xs text-amber-200 mt-1 font-semibold">{leaderboard[0]?.latest?.category || "Top Track Winner"}</div>
-                  <div className="mt-3 font-serif text-3xl sm:text-4xl font-black text-amber-300">
-                    {leaderboard[0]?.bestScore ?? "—"}<span className="text-sm text-amber-300/60">/100</span>
-                  </div>
-                </div>
-
-                {/* 3rd Place */}
-                <div className="rounded-2xl border border-slate-700 bg-white/[0.02] p-5 text-center order-3">
-                  <div className="text-4xl">🥉</div>
-                  <div className="mt-2 text-[10px] uppercase tracking-wider text-slate-400 font-bold">2nd Runner-Up</div>
-                  <div className="mt-1 font-serif text-xl font-bold text-slate-100">
-                    {leaderboard[2]?.name || "To Be Announced"}
-                  </div>
-                  <div className="text-xs text-amber-300/80 mt-1">{leaderboard[2]?.latest?.category || "—"}</div>
-                  <div className="mt-3 font-serif text-2xl font-black text-sky-400">
-                    {leaderboard[2]?.bestScore ?? "—"}<span className="text-xs text-slate-500">/100</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Track Champions Grid */}
-            <div className="space-y-3">
-              <h3 className="font-serif text-xl">🎖️ Partwise Track Champions</h3>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {partwiseGrouped.map((g) => (
-                  <div
-                    key={g.category}
-                    className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] p-4"
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+                    {curatedTeams.length} Teams Qualified
+                  </span>
+                  <button
+                    onClick={handleQualifyAllEvaluated}
+                    className="rounded-lg border border-sky-400/30 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold text-sky-200 hover:bg-sky-500/20 transition cursor-pointer"
+                    title="Mark all evaluated teams as qualified"
                   >
-                    <div>
-                      <span className="text-[10px] font-bold text-amber-300 uppercase">{g.category}</span>
-                      <div className="font-semibold text-slate-100 text-sm mt-0.5">
-                        {g.topTeam?.name || "Pending Evaluation"}
-                      </div>
-                      <div className="text-[11px] text-slate-400">{g.topTeam?.leader_email || ""}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-serif text-lg font-bold text-amber-300">
-                        {g.topTeam?.bestScore != null ? `${g.topTeam.bestScore}/100` : "—"}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    ⚡ Qualify All Evaluated
+                  </button>
+                  <button
+                    onClick={() => handleQualifyAboveScore(50)}
+                    className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/20 transition cursor-pointer"
+                    title="Mark all teams with score >= 50 as qualified"
+                  >
+                    ⚡ Qualify (≥ 50 pts)
+                  </button>
+                  {qualifiedTeamIds.length > 0 && (
+                    <button
+                      onClick={handleClearAllQualified}
+                      className="rounded-lg border border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-300 hover:bg-white/10 transition cursor-pointer"
+                    >
+                      ✕ Clear All
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Teams Selection Table */}
+              <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/40">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-white/10 bg-white/[0.02] text-[10px] uppercase tracking-wider text-slate-400">
+                    <tr>
+                      <th className="py-3 px-4">#</th>
+                      <th className="py-3 px-4">Team Name &amp; Leader</th>
+                      <th className="py-3 px-4">Track Category</th>
+                      <th className="py-3 px-4 text-center">Score (Admin Reference)</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {allScoredTeams.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-500 text-xs">
+                          No teams evaluated yet. Evaluated teams will appear here automatically.
+                        </td>
+                      </tr>
+                    ) : (
+                      allScoredTeams.map((team, idx) => {
+                        const isQual = qualifiedTeamIds.includes(team.id);
+
+                        return (
+                          <tr
+                            key={team.id}
+                            className={`transition hover:bg-white/[0.02] ${
+                              !isQual ? "opacity-60 bg-white/[0.01]" : "bg-emerald-950/10"
+                            }`}
+                          >
+                            <td className="py-3 px-4 font-mono font-bold text-slate-400">
+                              #{idx + 1}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-semibold text-slate-100 text-sm">{team.name}</div>
+                              <div className="text-xs text-amber-300 font-medium flex items-center gap-1.5 mt-0.5">
+                                <span>👤</span>
+                                <span>Leader: {team.leader_name || team.leader_email?.split("@")[0] || "Team Leader"}</span>
+                              </div>
+                              <div className="text-[11px] text-slate-400">{team.leader_email || "—"}</div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="rounded bg-white/5 border border-white/10 px-2 py-0.5 text-[10px] text-slate-300">
+                                {team.latest?.category || "General"}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className="font-serif text-base font-bold text-amber-300">
+                                {team.bestScore != null ? team.bestScore : "—"}
+                              </span>
+                              {team.bestScore != null && (
+                                <span className="text-[10px] text-slate-500 font-sans">/100</span>
+                              )}
+                              <div className="text-[9px] text-slate-500 uppercase tracking-wider mt-0.5">
+                                Admin only
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {isQual ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                                  <span>✓</span> Qualified
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/15 border border-slate-500/30 px-2.5 py-0.5 text-[10px] font-medium text-slate-400">
+                                  <span>○</span> Not Qualified
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              {isQual ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleQualified(team.id)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/20 transition cursor-pointer"
+                                  title="Remove this team from the qualified list"
+                                >
+                                  <span>❌</span> Delete / Remove
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleQualified(team.id)}
+                                  className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/20 transition cursor-pointer"
+                                  title="Add this team to the qualified list"
+                                >
+                                  <span>➕</span> Add / Qualify
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 

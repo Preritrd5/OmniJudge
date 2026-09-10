@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import ChromeScene from "@/components/ChromeScene";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Footer from "@/components/Footer";
+import { PublicNavAnnouncements } from "@/components/PublicNavAnnouncements";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -46,13 +47,20 @@ function Landing() {
             <span className="text-[9px] uppercase tracking-[0.25em] text-amber-300 font-bold block -mt-0.5">INNOVEDGE CLUB</span>
           </div>
         </div>
-        <nav className="flex items-center gap-2">
-          {/* <Link to="/team" className="rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-amber-300 hover:bg-amber-300/20 transition">
+        <nav className="flex items-center gap-2.5">
+          <PublicNavAnnouncements />
+          <Link
+            to="/team"
+            className="rounded-full border border-amber-300/50 bg-amber-400/15 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-amber-300 hover:bg-amber-400/25 transition shadow-[0_0_15px_rgba(251,191,36,0.2)]"
+          >
             Sign In
-          </Link> */}
-          {/* <Link to="/auth" className="rounded-full border border-purple-400/30 bg-purple-950/40 px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold text-purple-200 hover:bg-purple-900/40 transition">
-            👑 Admin Login
-          </Link> */}
+          </Link>
+          <Link
+            to="/auth"
+            className="rounded-full border border-purple-400/30 bg-purple-950/40 px-3.5 py-2 text-xs uppercase tracking-[0.15em] font-bold text-purple-200 hover:bg-purple-900/50 transition hidden md:inline-flex items-center gap-1"
+          >
+            <span>👑</span> Admin
+          </Link>
           <ThemeToggle />
         </nav>
       </header>
