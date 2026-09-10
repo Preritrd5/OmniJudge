@@ -1,0 +1,217 @@
+{
+  "plagiarism": {
+    "originalityScore": 90,
+    "similarityIndex": 10,
+    "riskLevel": "Low",
+    "verdict": "Well-researched and domain-specific application of established technologies.",
+    "analysis": "The proposal demonstrates a unique application of AI and computer vision to the niche domain of Legal Metrology compliance. While individual components like OCR and rule engines are common, their integration into a \"Hybrid AI + machine-checkable regulatory rules\" system with features like \"tamper-evident evidence packs\" and \"online vs offline mismatch detection\" shows a novel architectural approach. The problem phrasing is authentic, addressing a clear need for automated compliance enforcement. The extensive list of regulatory and technical references on page 6 indicates a strong commitment to academic and industry integrity.",
+    "sourcesBreakdown": {
+      "webMatches": 5,
+      "academicPapers": 5,
+      "codeRepoBoilerplate": 0,
+      "aiGeneratedLikelihood": 0
+    },
+    "citationsAudit": {
+      "citationsFound": true,
+      "citationCount": 12,
+      "citationQuality": "Properly Cited & Formatted",
+      "detectedReferences": [
+        "Legal Metrology Act, 2009",
+        "IEEE Xplore - hybrid AI and compliance systems",
+        "Springer article (2026) – Hybrid AI inspection",
+        "DeepInspect / SwitchOn – OCR/OCV code verification"
+      ]
+    },
+    "flaggedSnippets": [
+      {
+        "text": "AI-powered product scanner for packaged goods.",
+        "matchType": "Common Boilerplate"
+      },
+      {
+        "text": "Hybrid AI + machine-checkable regulatory rules.",
+        "matchType": "Novel Technical Phrasing"
+      },
+      {
+        "text": "Tamper-evident evidence pack for proceedings.",
+        "matchType": "Novel Technical Phrasing"
+      }
+    ],
+    "notes": "Judges should inquire about the specific implementation details of the \"Hybrid AI + Rules\" engine and the \"tamper-evident evidence pack\" during the live pitch to verify the novelty and technical depth. Also, verify the claimed 99.5% OCR/OCV accuracy from \"DeepInspect / SwitchOn\" and how it applies to their specific use case."
+  },
+  "executiveSummary": "The 'Jan Suraksha AI' project proposes an AI-powered Consumer Compliance Enforcement Network for Legal Metrology. It aims to automate the inspection of packaged goods using OCR and computer vision, checking against regulatory rules to provide instant compliance scores and generate tamper-evident evidence. This solution addresses the inefficiencies of manual inspections, empowers consumers, and provides government agencies with a risk-based dashboard for prioritized enforcement, demonstrating a strong potential for impact in the FoodTech and consumer protection sectors.",
+  "problemStatement": "Manual label inspection for packaged goods is time-consuming and error-prone for inspectors. Consumers lack the legal expertise to verify product compliance. Enforcement agencies struggle with unstructured case data, inefficient verification processes, and a lack of intelligence for prioritizing inspections. This leads to reduced consumer protection and inconsistent compliance enforcement.",
+  "solution": "Jan Suraksha AI proposes an AI-powered product scanner for packaged goods, utilizing OCR and computer vision to extract mandatory declarations. A rule engine checks Legal Metrology requirements, generating an instant compliance score and a tamper-evident evidence pack. The system also compares physical package data with online listings and provides a government risk dashboard for prioritized inspections, accessible via mobile/web interfaces for citizens and inspectors.",
+  "criteria": [
+    {
+      "id": "F1",
+      "name": "Innovation & Creativity",
+      "score": 9,
+      "evidence": "Page 2, 'INNOVATION G UNIQUENESS': 'Hybrid AI + machine-checkable regulatory rules. Instant compliance score and violation explanation. Tamper-evident evidence pack for proceedings. Online vs offline mismatch detection. Government risk dashboard for prioritised inspections.'",
+      "strengths": "The combination of hybrid AI with machine-checkable regulatory rules for legal metrology, the concept of a tamper-evident evidence pack, and online vs offline data comparison for compliance are genuinely innovative applications in this specific domain.",
+      "weaknesses": "While the *application* is novel, the underlying AI/CV technologies are mature. The proposal doesn't detail a breakthrough in core AI research, but rather a clever integration.",
+      "deductions": "-1 for relying on established core technologies, even if the integration is novel.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F10",
+      "name": "Security & Privacy",
+      "score": 7,
+      "evidence": "Page 3, 'TECHNOLOGY STACK': 'REST APIs + Authentication', 'Role-Based Access + Audit Logs'. Page 4, 'MITIGATION': 'Closed AI workflow for sensitive/privileged information.'",
+      "strengths": "Explicit mention of authentication, role-based access, audit logs, and a closed workflow for sensitive data indicates awareness of security considerations.",
+      "weaknesses": "Lacks specific details on data encryption (at rest/in transit), privacy by design principles, compliance with data protection regulations (e.g., GDPR, Indian data protection laws), or how the 'tamper-evident evidence pack' ensures data integrity cryptographically.",
+      "deductions": "-3 for lack of specific details on data encryption, privacy regulations, and cryptographic integrity for evidence packs.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F2",
+      "name": "Technical Feasibility",
+      "score": 9,
+      "evidence": "Page 4, 'FEASIBILITY': 'Technical: OCR/AI are mature; hybrid AI + rules improves reliability. Financial: Low prototype cost; cloud deployment limits infrastructure overhead. Operational: Simple capture workflow; minimal training for users and inspectors.' Page 3, 'TECHNOLOGY STACK' and 'IMPLEMENTATION FLOW'.",
+      "strengths": "The proposal leverages mature technologies (OCR, AI, standard web/mobile stack) and clearly outlines a step-by-step implementation flow. The hybrid AI approach is noted to improve reliability, addressing a common AI weakness.",
+      "weaknesses": "While the technologies are mature, the complexity of accurately parsing diverse packaging (curved, multilingual, damaged) and maintaining a dynamic rule engine for legal metrology is significant and only briefly acknowledged as a 'CHALLENGES G RISKS'. The feasibility of achieving high accuracy across all real-world scenarios is a potential gap.",
+      "deductions": "-1 for understating the complexity of real-world OCR accuracy and dynamic rule engine maintenance for legal metrology.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F3",
+      "name": "User Experience & Design",
+      "score": 7,
+      "evidence": "Page 2, 'PROPOSED SOLUTION': 'Mobile/web capture or upload of a product image.', 'Compliance score explains issues in plain language.' Page 3, 'USER + GOVERNMENT LAYER': 'Citizen / inspector interface.' Page 4, 'FEASIBILITY': 'Simple capture workflow; minimal training for users and inspectors.'",
+      "strengths": "Focus on a simple capture workflow, mobile/web accessibility, and explaining complex compliance issues in plain language are strong UX considerations. The mention of distinct interfaces for citizens and inspectors suggests tailored experiences.",
+      "weaknesses": "No visual mockups or wireframes are provided. Details on accessibility features for diverse users (e.g., visually impaired) are missing. The proposal doesn't elaborate on the design principles or user research conducted.",
+      "deductions": "-3 for lack of visual design elements, specific accessibility considerations, and details on user research or design principles.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F4",
+      "name": "Impact & Usefulness",
+      "score": 9,
+      "evidence": "Page 2, 'PROBLEM ADDRESSED': 'Reduces time spent on manual label inspection. Helps consumers verify compliance without legal expertise.' Page 5, 'IMPACT ON TARGET AUDIENCE' and 'BENEFITS OF THE SOLUTION': details multi-stakeholder benefits (consumers, inspectors, government, businesses, environmental).",
+      "strengths": "The proposal clearly articulates a multi-faceted impact across consumers, inspectors, government, businesses, and even environmental aspects. The problem-solution fit is strong, addressing inefficiencies in manual inspection and empowering consumers. The 'Make in India' aspect is a relevant use case.",
+      "weaknesses": "While the impact is broad, the proposal acknowledges 'Potential adoption barrier: smartphone access and digital literacy' and 'Accuracy depends on image quality; non-compliant businesses may resist adoption' (Page 5). These are significant challenges that could limit the *realized* impact if not adequately addressed.",
+      "deductions": "-1 for not providing more concrete strategies to overcome the acknowledged adoption barriers and resistance from non-compliant businesses, which could limit the full potential impact.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F5",
+      "name": "Technical Execution",
+      "score": 7,
+      "evidence": "Page 3, 'TECHNOLOGY STACK': lists specific technologies. Page 3, 'IMPLEMENTATION FLOW': outlines a 7-step process. Page 4, 'VIABILITY PATH': 'Prototype: Sample packaged products + controlled test set'.",
+      "strengths": "A clear technology stack is defined, and the implementation flow is logically structured. The mention of a prototype phase with a controlled test set indicates a plan for initial execution.",
+      "weaknesses": "No details on code quality, specific algorithms for hybrid AI/rules, or the actual state of the prototype (e.g., screenshots, demo links, specific features implemented). The proposal is a conceptual design, not a report on execution.",
+      "deductions": "-3 because this criterion is heavily about *actual* execution (prototype, code quality), which is not present in a proposal deck. The score reflects the *plan* for execution, not the execution itself.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F6",
+      "name": "Sustainability & Future Scope",
+      "score": 8,
+      "evidence": "Page 4, 'VIABILITY PATH': 'Prototype -> Pilot -> Scale (Category expansion + government integration + analytics)'. Page 4, 'MITIGATION': 'Versioned rule engine maintained by legal experts.' Page 5, 'BENEFITS OF THE SOLUTION': 'Environmental – less paper documentation; fewer unnecessary recalls/waste; more efficient inspection travel.'",
+      "strengths": "The proposal outlines a clear viability path from prototype to pilot to scale, including category expansion and government integration. It addresses the sustainability of the rule engine by proposing a 'versioned rule engine maintained by legal experts.' Environmental benefits are explicitly stated.",
+      "weaknesses": "While 'category expansion' is mentioned, specific future features or integrations beyond the core compliance checks are not detailed. The long-term financial sustainability model for maintaining the rule engine and AI models is not fully elaborated beyond 'low prototype cost.'",
+      "deductions": "-2 for not detailing specific future features or a more robust long-term financial model for maintenance and updates.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F7",
+      "name": "Presentation & Communication",
+      "score": 9,
+      "evidence": "The entire PDF deck, including clear headings, bullet points, logical flow from problem to solution, innovation, technical approach, feasibility, and impact. Dedicated 'RESEARCH AND REFERENCES' page (Page 6).",
+      "strengths": "The deck is well-structured, concise, and easy to understand. Key information is presented clearly using bullet points and distinct sections. The inclusion of a detailed reference page adds credibility. The language is professional and avoids jargon where possible, or explains it.",
+      "weaknesses": "The 'IDEA TITLE' on page 2 still says 'YOUR TEAM NAME' and 'IDEA TITLE' in the header, which is a minor oversight in template customization. The overall visual design is functional but not particularly engaging or unique beyond the SIH template.",
+      "deductions": "-1 for minor template customization oversight and a somewhat generic visual design.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F8",
+      "name": "Collaboration & Teamwork",
+      "score": 6,
+      "evidence": "Page 1: 'Team Name: Tantrakatha'. Pages 2 and 5: 'YOUR TEAM NAME' placeholder.",
+      "strengths": "The team name is provided.",
+      "weaknesses": "The document provides no information about the team members, their roles, skills, or how they collaborated. This criterion cannot be adequately assessed from the provided PDF.",
+      "deductions": "-4 for complete lack of information regarding team composition, roles, and collaboration approach within the document.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F9",
+      "name": "Business Viability (if applicable)",
+      "score": 7,
+      "evidence": "Page 4, 'FEASIBILITY': 'Financial: Low prototype cost; cloud deployment limits infrastructure overhead.' Page 5, 'BENEFITS OF THE SOLUTION': 'Economic – improves inspection productivity; reduces manual verification cost; creates compliance-tech opportunities; supports RSP/GST verification.' Page 4, 'VIABILITY PATH': 'Scale: Category expansion + government integration + analytics'.",
+      "strengths": "The proposal highlights cost reduction for inspectors and businesses, and the potential for 'compliance-tech opportunities.' The 'Scale' section suggests a path for growth and integration, implying a broader market. The low prototype cost is a positive for initial viability.",
+      "weaknesses": "A clear revenue model (e.g., subscription for businesses/government, freemium for consumers, data licensing) is not explicitly stated. Affordability for different user segments (especially small businesses or individual consumers) is not detailed. Market size analysis or competitive landscape is absent.",
+      "deductions": "-3 for missing a clear revenue model, detailed market analysis, and specific pricing/affordability strategies.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    }
+  ],
+  "strengths": [
+    "Strong problem-solution fit within a relevant domain (Legal Metrology for packaged goods, including food).",
+    "Innovative integration of mature technologies (Hybrid AI + Rules, tamper-evident evidence pack).",
+    "Clear articulation of multi-stakeholder impact (consumers, inspectors, government, businesses).",
+    "Well-researched with explicit regulatory and technical references.",
+    "Clear technical approach and implementation flow."
+  ],
+  "weaknesses": [
+    "Lack of detailed UX/UI design elements or user research.",
+    "Limited information on specific security measures beyond basic authentication and access control.",
+    "Absence of a clear revenue model or detailed market analysis.",
+    "No information on team composition or collaboration.",
+    "Understated complexity of real-world OCR accuracy and dynamic rule engine maintenance."
+  ],
+  "risks": [
+    "OCR accuracy challenges with poor, curved, damaged, or multilingual packaging.",
+    "Maintaining and updating regulatory rules in a versioned rule engine.",
+    "False positives/negatives from AI requiring human review.",
+    "Potential adoption barriers due to smartphone access, digital literacy, and resistance from non-compliant businesses.",
+    "AI should support, not replace, final legal decisions."
+  ],
+  "suggestions": [
+    "Develop detailed UI/UX mockups and conduct user testing with target audiences (consumers, inspectors).",
+    "Elaborate on specific data security measures, including encryption, and compliance with relevant data protection laws.",
+    "Define a clear business model, including revenue streams, pricing strategy, and market analysis.",
+    "Provide information about the team's expertise and roles.",
+    "Detail strategies for improving OCR accuracy in challenging real-world scenarios and for managing the dynamic nature of legal metrology rules."
+  ],
+  "totalScore": 78,
+  "overallRating": "Strong",
+  "audit": {
+    "pdfHash": "9e63b427e0b2ff6e500697c9cd02a95be5ce8012702f7b26b39896e416dfc5d1",
+    "gradingFingerprint": "5de83e9d856ed4759d5792e85a3319620c61f6ca5b1810c6fe6d5856e68a1af8",
+    "promptVersion": "v1",
+    "rubricVersion": "dd81d47054cdd233",
+    "modelVersion": "gemini-2.5-flash",
+    "gradingConfigVersion": "v1",
+    "calculatedScore": 78,
+    "isCachedResult": false,
+    "evaluatedAt": "2026-09-10T17:45:53.832Z"
+  }
+}

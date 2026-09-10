@@ -464,11 +464,11 @@ export async function evaluatePdf(
   const promptVersion = options?.promptVersion || GRADING_PROMPT_VERSION;
   const rubricFingerprint = getRubricFingerprint();
   const rubricVersion = options?.rubricVersion || rubricFingerprint.hash;
-  const gatewayUrl = process.env.AI_GATEWAY_BASE_URL || "";
+  const gatewayUrl = process.env.AI_GATEWAY_BASE_URL || "https://generativelanguage.googleapis.com";
   const isDirectGemini = gatewayUrl.includes("googleapis.com");
   const defaultModel = isDirectGemini
-    ? process.env.AI_MODEL || "gemini-3.6-flash"
-    : process.env.AI_MODEL || "google/gemini-3-pro-preview";
+    ? process.env.AI_MODEL || "gemini-2.5-flash"
+    : process.env.AI_MODEL || "google/gemini-2.5-flash";
   const modelVersion = options?.modelVersion || defaultModel;
   const gradingConfigVersion = options?.gradingConfigVersion || GRADING_CONFIG_VERSION;
   const seed = options?.seed ?? GRADING_SEED;
@@ -498,16 +498,15 @@ export async function evaluatePdf(
 
   // 5. In-flight deduplication wrapper: parallel identical calls share the exact same promise
   return runWithGradingDeduplication(gradingFingerprint, async () => {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) throw new Error("Missing OPENAI_API_KEY environment variable");
+    const key = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+    if (!key) throw new Error("Missing GEMINI_API_KEY environment variable");
 
     const SYSTEM = buildSystemPrompt(category);
     const modelsToTry = isDirectGemini
       ? [
           modelVersion,
-          "gemini-3.5-flash",
-          "gemini-3.7-flash",
-          "gemini-3-flash-preview",
+          "gemini-2.5-flash",
+          "gemini-3.5-flash-lite",
         ]
       : [modelVersion];
 
