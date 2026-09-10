@@ -1,0 +1,198 @@
+{
+  "plagiarism": {
+    "originalityScore": 62,
+    "similarityIndex": 38,
+    "riskLevel": "Moderate",
+    "verdict": "Standard Educational Content — High Similarity to Introductory ML Courseware",
+    "analysis": "The submission consists of generic introductory Machine Learning lecture slides rather than an original project proposal deck. Definitions, diagrams, and workflow steps closely mirror standard online tutorial material and course notes. No novel architecture or unique technical solution is presented.",
+    "sourcesBreakdown": {
+      "webMatches": 22,
+      "academicPapers": 3,
+      "codeRepoBoilerplate": 5,
+      "aiGeneratedLikelihood": 12
+    },
+    "citationsAudit": {
+      "citationsFound": false,
+      "citationCount": 0,
+      "citationQuality": "Limited / Missing Citations",
+      "detectedReferences": []
+    },
+    "citationsFound": false,
+    "flaggedSnippets": [
+      {
+        "text": "Machine Learning is a way of teaching computers to learn from data — just like we humans learn from experience.",
+        "matchType": "Common Boilerplate"
+      },
+      {
+        "text": "EDA stands for Exploratory Data Analysis — it's the process of analyzing, visualizing, and understanding your data",
+        "matchType": "Generic Formulation"
+      }
+    ],
+    "notes": "Judges should verify if the team uploaded an educational presentation deck by mistake instead of an actual hackathon solution proposal."
+  },
+  "executiveSummary": "The submission is a 60-slide introductory lecture deck explaining core Machine Learning concepts (AI vs ML vs DL, Supervised/Unsupervised/RL, EDA, Data Cleaning, and Preprocessing). It does not present a project problem statement, novel software design, prototype, or team deployment plan for SIH 2026.",
+  "problemStatement": "No specific real-world problem statement or domain-specific challenge is defined in the document.",
+  "solution": "No novel software product or technical solution is proposed; the document serves as an overview of standard ML algorithms and data preprocessing steps.",
+  "criteria": [
+    {
+      "id": "F1",
+      "name": "Innovation & Creativity",
+      "score": 3,
+      "evidence": "Pages 1-27 provide standard definitions of Machine Learning types and algorithms.",
+      "strengths": "Presents clear, simple analogies for explaining complex concepts like reinforcement learning.",
+      "weaknesses": "Lacks any original solution, system concept, or creative engineering application.",
+      "deductions": "Deducted due to absence of novel ideas or project-specific innovation.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F10",
+      "name": "Security & Privacy",
+      "score": 3,
+      "evidence": "No security or data privacy frameworks mentioned in the presentation.",
+      "strengths": "Identifies sensitive data cleaning aspects like removing invalid entries.",
+      "weaknesses": "Fails to address data protection regulations, encryption, access control, or privacy considerations.",
+      "deductions": "Deducted for omission of security and privacy measures.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F2",
+      "name": "Technical Feasibility",
+      "score": 4,
+      "evidence": "Pages 30-60 outline standard theoretical ML pipeline steps (EDA, imputation, scaling, feature selection).",
+      "strengths": "Accurately lists standard data science workflow methods.",
+      "weaknesses": "No technical system architecture, data flow diagrams, or feasibility assessment for a real system.",
+      "deductions": "Deducted for missing software architecture and implementation details.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F3",
+      "name": "User Experience & Design",
+      "score": 5,
+      "evidence": "Clean slide visuals and consistent dark-mode styling across pages 1 to 60.",
+      "strengths": "Legible typography and uncluttered visual layout.",
+      "weaknesses": "Evaluates presentation deck design only; lacks UI/UX designs for a software application.",
+      "deductions": "Deducted because no product interface or end-user UX design is submitted.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F4",
+      "name": "Impact & Usefulness",
+      "score": 4,
+      "evidence": "Pages 8 and 15 mention generic applications like spam detection and recommendation systems.",
+      "strengths": "Identifies broad industry applications of machine learning technologies.",
+      "weaknesses": "Does not address a target problem statement or measurable user impact.",
+      "deductions": "Deducted due to lack of a targeted problem-solution fit.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F5",
+      "name": "Technical Execution",
+      "score": 3,
+      "evidence": "Pages 33-35 reference basic pandas functions like head(), tail(), shape(), and info().",
+      "strengths": "Correctly references foundational data manipulation functions.",
+      "weaknesses": "No source code, repository link, working prototype, or empirical benchmark results provided.",
+      "deductions": "Deducted for lack of code execution and prototype demonstration.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F6",
+      "name": "Sustainability & Future Scope",
+      "score": 3,
+      "evidence": "Page 41 briefly mentions future learning concepts like linear regression and KNN interpolation.",
+      "strengths": "Acknowledges advanced data handling strategies.",
+      "weaknesses": "Lacks a operational sustainability plan, scaling roadmap, or maintenance strategy.",
+      "deductions": "Deducted for missing future deployment and sustainability plans.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F7",
+      "name": "Presentation & Communication",
+      "score": 6,
+      "evidence": "Pages 1-60 demonstrate sequential structured presentation of ML basics.",
+      "strengths": "Clear slide sequencing and easily digestible concepts for beginners.",
+      "weaknesses": "Structured as a classroom pitch rather than a competitive project proposal deck.",
+      "deductions": "Deducted for misaligned presentation format.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F8",
+      "name": "Collaboration & Teamwork",
+      "score": 3,
+      "evidence": "Page 2 lists a single presenter name 'Akarsh Vyas'.",
+      "strengths": "Attributes authorship clearly on slide 2.",
+      "weaknesses": "No multi-member team structure, role distribution, or collaborative effort documented.",
+      "deductions": "Deducted for lack of team dynamics and role definitions.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F9",
+      "name": "Business Viability (if applicable)",
+      "score": 3,
+      "evidence": "Page 21 shows a basic tabular loan prediction example.",
+      "strengths": "Illustrates a practical financial classification example.",
+      "weaknesses": "No business model, market size analysis, revenue strategy, or cost estimation.",
+      "deductions": "Deducted due to complete absence of business planning.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    }
+  ],
+  "strengths": [
+    "Clean, structured formatting suitable for introductory educational material.",
+    "Accurate high-level summaries of standard machine learning concepts and EDA pipelines."
+  ],
+  "weaknesses": [
+    "Submission is an educational lecture deck rather than a hackathon project proposal.",
+    "Lacks system architecture, source code, experimental results, and software interface designs.",
+    "No target problem statement, target audience definition, or business roadmap."
+  ],
+  "risks": [
+    "High evaluation risk due to non-alignment with hackathon proposal requirements.",
+    "Absence of concrete prototype or code implementation."
+  ],
+  "suggestions": [
+    "Replace the tutorial deck with a dedicated project submission outlining a specific problem, solution architecture, and implementation details.",
+    "Include system design diagrams, UI mockups, source code repository link, and team role breakdown."
+  ],
+  "totalScore": 37,
+  "overallRating": "Weak/incomplete",
+  "audit": {
+    "pdfHash": "134d3386c56d89a60557ef213507b313ac1c95875bb906f1de140dcc82a0d4f0",
+    "gradingFingerprint": "475fc7cf22161f2837faab227973c1ce9c71fd22cc8b96113ee1967728dd19a6",
+    "promptVersion": "v1",
+    "rubricVersion": "dd81d47054cdd233",
+    "modelVersion": "gemini-3.6-flash",
+    "gradingConfigVersion": "v1",
+    "calculatedScore": 37,
+    "isCachedResult": false,
+    "evaluatedAt": "2026-09-10T11:35:10.143Z"
+  }
+}

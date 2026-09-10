@@ -1140,10 +1140,11 @@ export const deleteAnnouncementFn = createServerFn({ method: "POST" })
   });
 
 export const reEvaluateSubmissionFn = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ submissionId: z.string().min(1) }).parse(d))
+  .inputValidator((d) => z.object({ submissionId: z.string().min(1), forceFresh: z.boolean().optional() }).parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { evaluatePdf } = await import("@/lib/evaluation.server");
+    const { computePdfHash } = await import("@/lib/grading-cache.server");
 
     const { data: sub, error } = await supabaseAdmin
       .from("submissions")
@@ -1161,8 +1162,12 @@ export const reEvaluateSubmissionFn = createServerFn({ method: "POST" })
 
     const buf = Buffer.from(await fileBlob.arrayBuffer());
     const base64 = buf.toString("base64");
+    const pdfHash = computePdfHash(buf);
 
-    const rawResult = await evaluatePdf(base64, sub.file_name, sub.category || undefined);
+    const rawResult = await evaluatePdf(base64, sub.file_name, sub.category || undefined, {
+      pdfHash,
+      forceFresh: Boolean(data.forceFresh),
+    });
 
     const existingTeacherEval = (sub.result as any)?.teacher_evaluation || null;
     const aiSuggestedTotal = (rawResult.criteria || []).reduce(

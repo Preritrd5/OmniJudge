@@ -4,10 +4,29 @@ import * as fs from "fs";
 import * as path from "path";
 import * as https from "https";
 import { createAiGatewayProvider } from "./ai-gateway.server";
+import {
+  computePdfHash,
+  computeGradingFingerprint,
+  getRubricFingerprint,
+  getCachedGrading,
+  setCachedGrading,
+  runWithGradingDeduplication,
+  gradingMetrics,
+  GRADING_PROMPT_VERSION,
+  GRADING_CONFIG_VERSION,
+  GRADING_SEED,
+} from "./grading-cache.server";
 
 const CRITERIA_PATH = path.resolve(process.cwd(), "criteria-config.json");
 
-export function readCriteriaConfig(): { id: string; name: string; maxScore: number; description: string; type: "ai" | "manual"; evalMode?: "ai" | "manual" }[] {
+export function readCriteriaConfig(): {
+  id: string;
+  name: string;
+  maxScore: number;
+  description: string;
+  type: "ai" | "manual";
+  evalMode?: "ai" | "manual";
+}[] {
   try {
     if (fs.existsSync(CRITERIA_PATH)) {
       const raw = JSON.parse(fs.readFileSync(CRITERIA_PATH, "utf-8"));
@@ -76,6 +95,20 @@ export const PlagiarismSchema = z.object({
 
 export type PlagiarismEvaluation = z.infer<typeof PlagiarismSchema>;
 
+export const AuditMetadataSchema = z.object({
+  pdfHash: z.string(),
+  gradingFingerprint: z.string(),
+  promptVersion: z.string(),
+  rubricVersion: z.string(),
+  modelVersion: z.string(),
+  gradingConfigVersion: z.string(),
+  calculatedScore: z.number(),
+  isCachedResult: z.boolean(),
+  evaluatedAt: z.string(),
+});
+
+export type AuditMetadata = z.infer<typeof AuditMetadataSchema>;
+
 export const ResultSchema = z.object({
   plagiarism: PlagiarismSchema.optional(),
   executiveSummary: z.string(),
@@ -88,19 +121,32 @@ export const ResultSchema = z.object({
   suggestions: z.array(z.string()),
   totalScore: z.number(),
   overallRating: z.string(),
+  audit: AuditMetadataSchema.optional(),
 });
 
 export type EvaluationResult = z.infer<typeof ResultSchema>;
 
-function buildSystemPrompt(category?: string): string {
-  const criteriaList = readCriteriaConfig();
-  const maxTotal = criteriaList.reduce((s, c) => s + c.maxScore, 0);
+export interface EvaluatePdfOptions {
+  pdfHash?: string;
+  forceFresh?: boolean;
+  promptVersion?: string;
+  rubricVersion?: string;
+  modelVersion?: string;
+  gradingConfigVersion?: string;
+  seed?: number;
+}
 
-  const criteriaText = criteriaList
+export function buildSystemPrompt(category?: string): string {
+  const criteriaList = readCriteriaConfig();
+  // Deterministic sorting by ID
+  const sortedCriteria = [...criteriaList].sort((a, b) => String(a.id || "").localeCompare(String(b.id || "")));
+  const maxTotal = sortedCriteria.reduce((s, c) => s + c.maxScore, 0);
+
+  const criteriaText = sortedCriteria
     .map((c) => `${c.id}. ${c.name} (${c.maxScore} pts) [MANUAL EVALUATION BY JUDGE 1 & JUDGE 2] — ${c.description}`)
     .join("\n");
 
-  const count = criteriaList.length;
+  const count = sortedCriteria.length;
 
   return `You are the Official Evaluation Engine for SIH Premier 2026.
 ${category ? `The team has selected the following topic/category: "${category}". Please evaluate their submission within the context of this category.` : ""}
@@ -185,13 +231,14 @@ Respond with ONLY a single JSON object (no markdown, no prose, no code fences) m
 }`;
 }
 
-function extractJson(text: string): unknown {
+export function extractJson(text: string): unknown {
   let s = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
   const start = s.search(/[\{\[]/);
+  if (start === -1) throw new Error("No JSON object found in model response");
   const openCh = s[start];
   const closeCh = openCh === "[" ? "]" : "}";
   const end = s.lastIndexOf(closeCh);
-  if (start === -1 || end === -1) throw new Error("No JSON found in model response");
+  if (end === -1 || end < start) throw new Error("Malformed JSON structure in model response");
   s = s.substring(start, end + 1);
   try {
     return JSON.parse(s);
@@ -201,7 +248,7 @@ function extractJson(text: string): unknown {
   }
 }
 
-function standardizeResult(result: EvaluationResult): EvaluationResult {
+export function standardizeResult(result: EvaluationResult): EvaluationResult {
   const criteriaConfig = readCriteriaConfig();
   const configMap = new Map(criteriaConfig.map((c) => [c.id, c]));
 
@@ -241,29 +288,50 @@ function standardizeResult(result: EvaluationResult): EvaluationResult {
       };
     }
     if (!result.plagiarism.citationsAudit) {
+      const found = Boolean(result.plagiarism.citationsFound);
       result.plagiarism.citationsAudit = {
-        citationsFound: Boolean(result.plagiarism.citationsFound),
-        citationCount: result.plagiarism.citationsFound ? 3 : 0,
-        citationQuality: result.plagiarism.citationsFound ? "Adequate Informal Citations" : "Limited / Missing Citations",
+        citationsFound: found,
+        citationCount: found ? 3 : 0,
+        citationQuality: found ? "Adequate Informal Citations" : "Limited / Missing Citations",
         detectedReferences: [],
       };
     }
   }
 
+  // Canonical sort and normalize criteria
   result.criteria = result.criteria.map((c) => {
     const cfg = configMap.get(c.id);
+    const max = cfg?.maxScore ?? 10;
+    const rawScore = c.score != null ? Number(c.score) : 0;
+    // Bound score between 0 and maxScore
+    const boundedScore = isNaN(rawScore) ? 0 : Math.max(0, Math.min(max, Math.round(rawScore)));
+
     return {
       ...c,
+      id: c.id,
       name: cfg?.name || c.name,
-      maxScore: cfg?.maxScore ?? 10,
-      score: c.score != null ? Number(c.score) : 0,
+      maxScore: max,
+      score: boundedScore,
       type: "manual",
       evalMode: "manual",
       isManuallyGraded: Boolean(c.isManuallyGraded),
     };
   });
 
-  result.totalScore = result.criteria.reduce((sum, c) => sum + (c.score || 0), 0);
+  // Sort criteria deterministically by ID
+  result.criteria.sort((a, b) => String(a.id || "").localeCompare(String(b.id || "")));
+
+  // Authoritative Code Calculation: sum criteria scores
+  const calculatedTotal = result.criteria.reduce((sum, c) => sum + (c.score || 0), 0);
+  result.totalScore = calculatedTotal;
+
+  // Authoritative Rating assignment
+  if (calculatedTotal >= 85) result.overallRating = "Excellent";
+  else if (calculatedTotal >= 70) result.overallRating = "Strong";
+  else if (calculatedTotal >= 61) result.overallRating = "Promising with gaps";
+  else if (calculatedTotal >= 41) result.overallRating = "Major gaps";
+  else result.overallRating = "Weak/incomplete";
+
   return result;
 }
 
@@ -309,13 +377,17 @@ function httpsJsonPost(
   });
 }
 
-function buildFallbackResult(fileName: string, category?: string): EvaluationResult {
+export function buildFallbackResult(
+  fileName: string,
+  category?: string,
+  auditInfo?: { pdfHash: string; gradingFingerprint: string; promptVersion: string; rubricVersion: string; modelVersion: string; gradingConfigVersion: string }
+): EvaluationResult {
   const criteriaList = readCriteriaConfig();
   const criteria = criteriaList.map((c) => ({
     id: c.id,
     name: c.name,
     score: Math.min(c.maxScore, Math.round(c.maxScore * 0.7)),
-    evidence: `Proposal "${fileName}" received for track ${category || "General"}. Initial baseline score assigned.`,
+    evidence: `Proposal received for track ${category || "General"}. Initial baseline reference score assigned.`,
     strengths: "Structured domain problem alignment and presentation deck received.",
     weaknesses: "Pending in-person / oral presentation review.",
     deductions: "None at baseline stage.",
@@ -326,8 +398,8 @@ function buildFallbackResult(fileName: string, category?: string): EvaluationRes
 
   const total = criteria.reduce((sum: number, c: { score: number }) => sum + c.score, 0);
 
-  return {
-    executiveSummary: `Proposal "${fileName}" has been verified and registered for evaluation under track ${category || "General"}.`,
+  const fallback: EvaluationResult = {
+    executiveSummary: `Proposal has been verified and registered for evaluation under track ${category || "General"}.`,
     problemStatement: `Real-world challenges addressed in ${category || "the selected domain"}.`,
     solution: "Technical formulation and architecture presented in the proposal deck.",
     totalScore: total,
@@ -359,101 +431,198 @@ function buildFallbackResult(fileName: string, category?: string): EvaluationRes
       notes: "Verified original by Ideathon Evaluation Engine. Ready for Judge 1 & Judge 2 scoring.",
     },
   };
+
+  if (auditInfo) {
+    fallback.audit = {
+      pdfHash: auditInfo.pdfHash,
+      gradingFingerprint: auditInfo.gradingFingerprint,
+      promptVersion: auditInfo.promptVersion,
+      rubricVersion: auditInfo.rubricVersion,
+      modelVersion: auditInfo.modelVersion,
+      gradingConfigVersion: auditInfo.gradingConfigVersion,
+      calculatedScore: total,
+      isCachedResult: false,
+      evaluatedAt: new Date().toISOString(),
+    };
+  }
+
+  return fallback;
 }
 
-export async function evaluatePdf(base64Pdf: string, fileName: string, category?: string): Promise<EvaluationResult> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("Missing OPENAI_API_KEY environment variable");
+export async function evaluatePdf(
+  base64Pdf: string,
+  fileName: string,
+  category?: string,
+  options?: EvaluatePdfOptions
+): Promise<EvaluationResult> {
+  gradingMetrics.totalEvaluations++;
 
+  // 1. Compute cryptographic PDF hash
+  const pdfHash = options?.pdfHash || computePdfHash(base64Pdf);
+
+  // 2. Canonical version constants
+  const promptVersion = options?.promptVersion || GRADING_PROMPT_VERSION;
+  const rubricFingerprint = getRubricFingerprint();
+  const rubricVersion = options?.rubricVersion || rubricFingerprint.hash;
   const gatewayUrl = process.env.AI_GATEWAY_BASE_URL || "";
   const isDirectGemini = gatewayUrl.includes("googleapis.com");
+  const defaultModel = isDirectGemini
+    ? process.env.AI_MODEL || "gemini-3.6-flash"
+    : process.env.AI_MODEL || "google/gemini-3-pro-preview";
+  const modelVersion = options?.modelVersion || defaultModel;
+  const gradingConfigVersion = options?.gradingConfigVersion || GRADING_CONFIG_VERSION;
+  const seed = options?.seed ?? GRADING_SEED;
 
-  const SYSTEM = buildSystemPrompt(category);
-  const modelsToTry = isDirectGemini
-    ? [
-        process.env.AI_MODEL || "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.7-flash",
-        "gemini-3-flash-preview",
-      ]
-    : [process.env.AI_MODEL || "google/gemini-3-pro-preview"];
+  // 3. Compute canonical grading fingerprint
+  const gradingFingerprint = computeGradingFingerprint({
+    pdfHash,
+    category,
+    promptVersion,
+    rubricVersion,
+    modelVersion,
+    gradingConfigVersion,
+  });
 
-  let lastError: any;
-  for (const model of modelsToTry) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        if (isDirectGemini) {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-          const body = {
-            contents: [
-              {
-                parts: [
-                  {
-                    text: `${SYSTEM}\n\nEvaluate the attached submission PDF (${fileName}) per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
-                  },
-                  {
-                    inlineData: {
-                      mimeType: "application/pdf",
-                      data: base64Pdf,
-                    },
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0,
-              responseMimeType: "application/json",
-            },
-          };
-
-          const res = await httpsJsonPost(url, body, 60000);
-
-          if (!res.ok) {
-            if ((res.status === 503 || res.status === 429) && attempt < 2) {
-              console.warn(`[evaluatePdf] ${model} attempt ${attempt} returned status ${res.status}. Retrying in 2s...`);
-              await new Promise((r) => setTimeout(r, 2000));
-              continue;
-            }
-            throw new Error(`Gemini API error (${res.status}): ${res.text}`);
-          }
-
-          const responseData = JSON.parse(res.text);
-          const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (!text) throw new Error("Empty response from Gemini API");
-          const result = ResultSchema.parse(extractJson(text));
-          return standardizeResult(result);
-        } else {
-          const gateway = createAiGatewayProvider(key);
-          const { text } = await generateText({
-            model: gateway(model),
-            temperature: 0,
-            system: SYSTEM,
-            messages: [
-              {
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `Evaluate the attached submission PDF (${fileName}) per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
-                  },
-                  { type: "file", mediaType: "application/pdf", data: base64Pdf },
-                ],
-              },
-            ],
-          });
-          const result = ResultSchema.parse(extractJson(text));
-          return standardizeResult(result);
-        }
-      } catch (e: any) {
-        lastError = e;
-        console.error(`[evaluatePdf] model ${model} (attempt ${attempt}) failed:`, e?.message || e);
-        if (attempt < 2 && (String(e?.message).includes("503") || String(e?.message).includes("429"))) {
-          await new Promise((r) => setTimeout(r, 2000));
-        }
-      }
+  // 4. Check cache (idempotency layer)
+  if (!options?.forceFresh) {
+    const cached = getCachedGrading(gradingFingerprint);
+    if (cached) {
+      console.log(
+        `[evaluatePdf] Cache HIT for fingerprint ${gradingFingerprint.slice(0, 12)} (score: ${cached.totalScore})`
+      );
+      return cached;
     }
   }
 
-  console.warn(`[evaluatePdf] All AI models exhausted (${lastError?.message}). Falling back to baseline evaluation.`);
-  return buildFallbackResult(fileName, category);
+  gradingMetrics.cacheMisses++;
+
+  // 5. In-flight deduplication wrapper: parallel identical calls share the exact same promise
+  return runWithGradingDeduplication(gradingFingerprint, async () => {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key) throw new Error("Missing OPENAI_API_KEY environment variable");
+
+    const SYSTEM = buildSystemPrompt(category);
+    const modelsToTry = isDirectGemini
+      ? [
+          modelVersion,
+          "gemini-3.5-flash",
+          "gemini-3.7-flash",
+          "gemini-3-flash-preview",
+        ]
+      : [modelVersion];
+
+    let lastError: any;
+    for (const model of modelsToTry) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          let parsedResult: EvaluationResult;
+
+          if (isDirectGemini) {
+            gradingMetrics.geminiApiCalls++;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+            const body = {
+              contents: [
+                {
+                  parts: [
+                    {
+                      // Deterministic user prompt: neutral text, no timestamps, no variable file name
+                      text: `${SYSTEM}\n\nEvaluate the attached proposal PDF deck per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
+                    },
+                    {
+                      inlineData: {
+                        mimeType: "application/pdf",
+                        data: base64Pdf,
+                      },
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0,
+                seed,
+                responseMimeType: "application/json",
+              },
+            };
+
+            const res = await httpsJsonPost(url, body, 60000);
+
+            if (!res.ok) {
+              if ((res.status === 503 || res.status === 429) && attempt < 2) {
+                console.warn(`[evaluatePdf] ${model} attempt ${attempt} returned status ${res.status}. Retrying in 2s...`);
+                await new Promise((r) => setTimeout(r, 2000));
+                continue;
+              }
+              throw new Error(`Gemini API error (${res.status}): ${res.text}`);
+            }
+
+            const responseData = JSON.parse(res.text);
+            const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!text) throw new Error("Empty response from Gemini API");
+
+            // Extract JSON and validate schema; will throw if malformed (prevents corrupt cache)
+            const rawJson = extractJson(text);
+            parsedResult = ResultSchema.parse(rawJson);
+          } else {
+            gradingMetrics.geminiApiCalls++;
+            const gateway = createAiGatewayProvider(key);
+            const { text } = await generateText({
+              model: gateway(model),
+              temperature: 0,
+              seed,
+              system: SYSTEM,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "text",
+                      text: `Evaluate the attached proposal PDF deck per the rubric. Read every page. Cite concrete evidence (quote or paraphrase with page reference) for each criterion. Do not infer features that are not explicitly stated. Return ONLY the JSON object described in the system message.`,
+                    },
+                    { type: "file", mediaType: "application/pdf", data: base64Pdf },
+                  ],
+                },
+              ],
+            });
+
+            const rawJson = extractJson(text);
+            parsedResult = ResultSchema.parse(rawJson);
+          }
+
+          // Authoritatively standardize and sum scores in application code
+          const standardized = standardizeResult(parsedResult);
+
+          // Attach audit trail metadata
+          standardized.audit = {
+            pdfHash,
+            gradingFingerprint,
+            promptVersion,
+            rubricVersion,
+            modelVersion: model,
+            gradingConfigVersion,
+            calculatedScore: standardized.totalScore,
+            isCachedResult: false,
+            evaluatedAt: new Date().toISOString(),
+          };
+
+          return standardized;
+        } catch (e: any) {
+          lastError = e;
+          console.error(`[evaluatePdf] model ${model} (attempt ${attempt}) failed:`, e?.message || e);
+          if (attempt < 2 && (String(e?.message).includes("503") || String(e?.message).includes("429"))) {
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+        }
+      }
+    }
+
+    console.warn(`[evaluatePdf] All AI models exhausted (${lastError?.message}). Falling back to baseline evaluation.`);
+    return buildFallbackResult(fileName, category, {
+      pdfHash,
+      gradingFingerprint,
+      promptVersion,
+      rubricVersion,
+      modelVersion,
+      gradingConfigVersion,
+    });
+  });
 }

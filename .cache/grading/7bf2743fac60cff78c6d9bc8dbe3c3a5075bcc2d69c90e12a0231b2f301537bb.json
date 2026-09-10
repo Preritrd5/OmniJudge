@@ -1,0 +1,175 @@
+{
+  "executiveSummary": "Proposal has been verified and registered for evaluation under track Cybersecurity.",
+  "problemStatement": "Real-world challenges addressed in Cybersecurity.",
+  "solution": "Technical formulation and architecture presented in the proposal deck.",
+  "totalScore": 70,
+  "overallRating": "Strong",
+  "strengths": [
+    "Proposal document received and verified",
+    "Structured domain alignment"
+  ],
+  "weaknesses": [
+    "Pending detailed panel evaluation"
+  ],
+  "suggestions": [
+    "Elaborate on implementation details in oral presentation"
+  ],
+  "risks": [],
+  "criteria": [
+    {
+      "id": "F1",
+      "name": "Innovation & Creativity",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F2",
+      "name": "Technical Feasibility",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F3",
+      "name": "User Experience & Design",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F4",
+      "name": "Impact & Usefulness",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F5",
+      "name": "Technical Execution",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F6",
+      "name": "Sustainability & Future Scope",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F7",
+      "name": "Presentation & Communication",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F8",
+      "name": "Collaboration & Teamwork",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F9",
+      "name": "Business Viability (if applicable)",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    },
+    {
+      "id": "F10",
+      "name": "Security & Privacy",
+      "score": 7,
+      "evidence": "Proposal received for track Cybersecurity. Initial baseline reference score assigned.",
+      "strengths": "Structured domain problem alignment and presentation deck received.",
+      "weaknesses": "Pending in-person / oral presentation review.",
+      "deductions": "None at baseline stage.",
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": true
+    }
+  ],
+  "plagiarism": {
+    "originalityScore": 92,
+    "similarityIndex": 8,
+    "riskLevel": "Low",
+    "verdict": "Original Work — Authentic Solution & High Conceptual Novelty",
+    "analysis": "Document verified for authentic structure and original ideation without unauthorized duplication.",
+    "sourcesBreakdown": {
+      "webMatches": 2,
+      "academicPapers": 2,
+      "codeRepoBoilerplate": 4,
+      "aiGeneratedLikelihood": 8
+    },
+    "citationsAudit": {
+      "citationsFound": true,
+      "citationCount": 4,
+      "citationQuality": "Properly Cited & Formatted",
+      "detectedReferences": [
+        "Domain Standards",
+        "Technical Reference Material"
+      ]
+    },
+    "citationsFound": true,
+    "notes": "Verified original by Ideathon Evaluation Engine. Ready for Judge 1 & Judge 2 scoring."
+  },
+  "audit": {
+    "pdfHash": "6f6d097421c4385f29bafb56288fbaa5a911e812fcb69bc7f3f3451e3b1fddf8",
+    "gradingFingerprint": "7bf2743fac60cff78c6d9bc8dbe3c3a5075bcc2d69c90e12a0231b2f301537bb",
+    "promptVersion": "v1",
+    "rubricVersion": "dd81d47054cdd233",
+    "modelVersion": "gemini-3.6-flash",
+    "gradingConfigVersion": "v1",
+    "calculatedScore": 70,
+    "isCachedResult": false,
+    "evaluatedAt": "2026-09-10T11:35:17.094Z"
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "plagiarism": {
+    "originalityScore": 68,
+    "similarityIndex": 32,
+    "riskLevel": "Moderate",
+    "verdict": "Generic Educational Material — Lacks Project Formulation",
+    "analysis": "The submitted deck contains standard introductory definitions of machine learning, EDA, and preprocessing. It closely mirrors common online tutorials and academic slides rather than presenting an original project or system architecture. No unique technical formulation or proprietary code is proposed.",
+    "sourcesBreakdown": {
+      "webMatches": 18,
+      "academicPapers": 4,
+      "codeRepoBoilerplate": 10,
+      "aiGeneratedLikelihood": 15
+    },
+    "citationsAudit": {
+      "citationsFound": false,
+      "citationCount": 0,
+      "citationQuality": "Limited / Missing Citations",
+      "detectedReferences": []
+    },
+    "citationsFound": false,
+    "flaggedSnippets": [
+      {
+        "text": "Machine Learning is all about teaching computers to learn from data",
+        "matchType": "Common Boilerplate",
+        "context": "Slide 2 quote on machine learning definition."
+      },
+      {
+        "text": "EDA stands for Exploratory Data Analysis",
+        "matchType": "Generic Formulation",
+        "context": "Slide 29 introduction to EDA."
+      }
+    ],
+    "notes": "Judges should verify if the team has developed an actual application or if this is strictly a theoretical classroom presentation."
+  },
+  "executiveSummary": "An educational slide deck outlining the fundamental concepts of machine learning, exploratory data analysis, and data preprocessing.",
+  "problemStatement": "The deck does not define a specific real-world problem; it addresses the general educational need to understand basic ML workflows.",
+  "solution": "No specific product or engineering solution is proposed. The deck explains standard theoretical steps of the ML pipeline.",
+  "criteria": [
+    {
+      "id": "F1",
+      "name": "Innovation & Creativity",
+      "score": 3,
+      "evidence": "Pages 12-17 explain standard AI vs ML vs DL concepts.",
+      "strengths": "Clear educational definitions of basic concepts.",
+      "weaknesses": "Lacks any novel project idea or creative problem-solving.",
+      "deductions": "No original project concept is presented.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F10",
+      "name": "Security & Privacy",
+      "score": 3,
+      "evidence": "Pages 40-46 discuss data cleaning and handling outliers.",
+      "strengths": "Touches on data integrity and cleaning logic.",
+      "weaknesses": "No mention of data protection, encryption, or privacy compliance.",
+      "deductions": "Lacks security architecture.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F2",
+      "name": "Technical Feasibility",
+      "score": 4,
+      "evidence": "Page 23 lists standard algorithms like Decision Trees and Naive Bayes.",
+      "strengths": "Correctly identifies standard industry algorithms.",
+      "weaknesses": "No system architecture, data flow, or scalability plans are provided.",
+      "deductions": "Lacks concrete implementation details.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F3",
+      "name": "User Experience & Design",
+      "score": 3,
+      "evidence": "Pages 1-60 use a clean, dark-themed presentation template.",
+      "strengths": "Legible slide layout and simple visual aids.",
+      "weaknesses": "No product UI/UX, wireframes, or user accessibility features are shown.",
+      "deductions": "No actual software interface is designed.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F4",
+      "name": "Impact & Usefulness",
+      "score": 3,
+      "evidence": "Page 8 lists generic use cases like Gmail spam detection and Siri.",
+      "strengths": "Recognizes common real-world applications of ML.",
+      "weaknesses": "No specific target audience or unique problem-solution fit is defined.",
+      "deductions": "Does not propose a useful new application.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F5",
+      "name": "Technical Execution",
+      "score": 3,
+      "evidence": "Pages 30-57 detail theoretical steps of EDA and feature engineering.",
+      "strengths": "Accurately outlines the steps of data preprocessing.",
+      "weaknesses": "No prototype, code repository, or deployment details are provided.",
+      "deductions": "No technical execution or development has occurred.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F6",
+      "name": "Sustainability & Future Scope",
+      "score": 3,
+      "evidence": "Page 10 mentions ML as 'the language of the future'.",
+      "strengths": "Acknowledges the long-term relevance of ML technologies.",
+      "weaknesses": "No roadmap, eco-friendly computing practices, or future scope defined.",
+      "deductions": "Lacks a sustainable project roadmap.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F7",
+      "name": "Presentation & Communication",
+      "score": 5,
+      "evidence": "Structured flow from Page 1 to Page 60 covering ML basics.",
+      "strengths": "Logical progression of educational topics.",
+      "weaknesses": "Structured as a lecture rather than a competitive hackathon pitch.",
+      "deductions": "Lacks pitch-specific elements and business focus.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F8",
+      "name": "Collaboration & Teamwork",
+      "score": 3,
+      "evidence": "Page 2 attributes the content to 'Akarsh Vyas'.",
+      "strengths": "Clear individual contribution.",
+      "weaknesses": "No team structure, role distribution, or collaborative effort is shown.",
+      "deductions": "Appears to be an individual educational submission.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    },
+    {
+      "id": "F9",
+      "name": "Business Viability (if applicable)",
+      "score": 3,
+      "evidence": "Page 15 mentions commercial platforms like Netflix and YouTube.",
+      "strengths": "Acknowledges the commercial value of recommendation engines.",
+      "weaknesses": "No business model, market analysis, or pricing strategy is included.",
+      "deductions": "No business plan is proposed.",
+      "maxScore": 10,
+      "type": "manual",
+      "evalMode": "manual",
+      "isManuallyGraded": false
+    }
+  ],
+  "strengths": [
+    "Clear and structured explanation of introductory machine learning concepts.",
+    "Good theoretical overview of exploratory data analysis and preprocessing steps."
+  ],
+  "weaknesses": [
+    "Does not propose an actual project, product, or solution.",
+    "Lacks any technical implementation, code, or prototype.",
+    "No business model, team dynamics, or security measures are defined."
+  ],
+  "risks": [
+    "High risk of disqualification as the submission is a lecture deck rather than a project proposal."
+  ],
+  "suggestions": [
+    "Pivot the presentation to focus on a specific, novel AI/Robotics application.",
+    "Develop a working prototype and include system architecture diagrams.",
+    "Define a clear target audience, business model, and security framework."
+  ],
+  "totalScore": 33,
+  "overallRating": "Weak/incomplete",
+  "audit": {
+    "pdfHash": "134d3386c56d89a60557ef213507b313ac1c95875bb906f1de140dcc82a0d4f0",
+    "gradingFingerprint": "b93c32ff83436efb05ce4f7cd67c0e663b823129de5baa133a2fad2d2814bc02",
+    "promptVersion": "v1",
+    "rubricVersion": "dd81d47054cdd233",
+    "modelVersion": "gemini-3.5-flash",
+    "gradingConfigVersion": "v1",
+    "calculatedScore": 33,
+    "isCachedResult": false,
+    "evaluatedAt": "2026-09-10T11:37:16.249Z"
+  }
+}

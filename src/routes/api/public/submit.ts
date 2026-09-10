@@ -91,9 +91,11 @@ export const Route = createFileRoute("/api/public/submit")({
           }
 
           // Upload PDF
+          const { computePdfHash } = await import("@/lib/grading-cache.server");
           const safeName = file.name.replace(/[^\w.\-]+/g, "_").slice(0, 120);
           const path = `${teamId}/${Date.now()}-${safeName}`;
           const buf = new Uint8Array(await file.arrayBuffer());
+          const pdfHash = computePdfHash(buf);
           const { error: upErr } = await supabaseAdmin.storage
             .from("submissions")
             .upload(path, buf, { contentType: "application/pdf", upsert: false });
@@ -119,7 +121,7 @@ export const Route = createFileRoute("/api/public/submit")({
                 .eq("id", sub.id);
 
               const { evaluatePdf } = await import("@/lib/evaluation.server");
-              const rawResult = await evaluatePdf(base64, file.name, category);
+              const rawResult = await evaluatePdf(base64, file.name, category, { pdfHash });
               
               // Fetch latest submission row to preserve any existing teacher marks
               const { data: latestSubRow } = await supabaseAdmin

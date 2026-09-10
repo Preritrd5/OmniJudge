@@ -20,14 +20,14 @@
     "leaderName": "Team Leader",
     "leaderEmail": "xyz12@gmail.com",
     "leaderPhone": "6362285771",
-    "category": "FinTech & Web3",
+    "category": "Artificial Intelligence & Robotics",
     "projectTitle": "XYZ",
     "projectDescription": "MY Wish.... , I won't tell",
     "members": [
       "v - v"
     ],
     "createdAt": "2026-09-06T12:50:54.180Z",
-    "updatedAt": "2026-09-10T09:41:33.234Z"
+    "updatedAt": "2026-09-10T11:37:18.147Z"
   },
   "5d386abd-24bf-4a4c-bc94-31e8b9821c42": {
     "teamId": "5d386abd-24bf-4a4c-bc94-31e8b9821c42",
@@ -59,13 +59,13 @@
     "teamName": "Rocket",
     "leaderName": "Rocket",
     "leaderEmail": "rock23@gmail.com",
-    "category": "Others",
+    "category": "Smart Automation",
     "members": [],
     "createdAt": "2026-09-10T09:18:18.039Z",
-    "updatedAt": "2026-09-10T09:20:26.679Z",
+    "updatedAt": "2026-09-10T10:53:00.452Z",
     "leaderPhone": "",
-    "projectTitle": "dhjdi",
-    "projectDescription": "dmk"
+    "projectTitle": "Jan Suraksha AI–Consumer Compliance Enforcement Network",
+    "projectDescription": "An AI-powered consumer compliance enforcement system for packaged goods that uses mobile/web product images, OCR and computer vision to extract mandatory declarations such as MRP, quantity, dates, manufacturer and Country of Origin. A machine-checkable Legal Metrology rule engine validates the extracted information, generates an instant compliance score with plain-language violation explanations, and compares physical package data with online listings. The system also creates tamper-evident evidence packs with image and timestamp, while a government risk dashboard helps inspectors identify and prioritise cases for inspection."
   },
   "4bc6a951-6635-4b37-9559-bc5c82fa68fd": {
     "teamId": "4bc6a951-6635-4b37-9559-bc5c82fa68fd",
@@ -101,7 +101,7 @@
     "category": "Blockchain & Cybersecurity",
     "members": [],
     "createdAt": "2026-09-10T10:13:26.360Z",
-    "updatedAt": "2026-09-10T10:14:16.525Z",
+    "updatedAt": "2026-09-10T10:40:06.857Z",
     "leaderPhone": "",
     "projectTitle": "kjb",
     "projectDescription": "kn"
