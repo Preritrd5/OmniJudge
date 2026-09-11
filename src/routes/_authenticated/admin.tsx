@@ -201,8 +201,8 @@ function AdminDashboard() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setCurrentUser(data.user || null);
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUser(data.session?.user || null);
     });
 
     const {
@@ -253,21 +253,22 @@ function AdminDashboard() {
 
     const handleVisibilityOrFocus = async () => {
       if (document.visibilityState === "visible") {
-        const { data } = await supabase.auth.getUser();
-        if (!data.user) {
+        const { data } = await supabase.auth.getSession();
+        const user = data.session?.user;
+        if (!user) {
           await queryClient.cancelQueries();
           queryClient.clear();
           setCurrentUser(null);
           navigate({ to: "/auth" });
         } else {
           setCurrentUser((prev: any) => {
-            if (prev?.id && prev.id !== data.user.id) {
+            if (prev?.id && prev.id !== user.id) {
               queryClient.cancelQueries().then(() => {
                 queryClient.clear();
                 queryClient.invalidateQueries();
               });
             }
-            return data.user;
+            return user;
           });
         }
       }

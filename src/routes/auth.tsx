@@ -47,10 +47,10 @@ function AuthPage() {
   );
 
   useEffect(() => {
-    // Check initial session on mount
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        checkAndRedirect(data.user);
+    // Check initial cached session on mount (instant from memory/localStorage)
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        checkAndRedirect(data.session.user);
       }
     });
 
@@ -66,20 +66,20 @@ function AuthPage() {
     // Listen for cross-tab auth events via BroadcastChannel/storage
     const unsubscribeSync = subscribeAuthSync((event) => {
       if (event.type === "ADMIN_AUTH_CHANGED" && event.event === "SIGNED_IN") {
-        supabase.auth.getUser().then(({ data }) => {
-          if (data.user) {
-            checkAndRedirect(data.user);
+        supabase.auth.getSession().then(({ data }) => {
+          if (data.session?.user) {
+            checkAndRedirect(data.session.user);
           }
         });
       }
     });
 
-    // Check on tab focus / visibility
+    // Check on tab focus / visibility (instant from memory/localStorage)
     const handleFocus = () => {
       if (document.visibilityState === "visible") {
-        supabase.auth.getUser().then(({ data }) => {
-          if (data.user) {
-            checkAndRedirect(data.user);
+        supabase.auth.getSession().then(({ data }) => {
+          if (data.session?.user) {
+            checkAndRedirect(data.session.user);
           }
         });
       }
@@ -101,12 +101,41 @@ function AuthPage() {
     setErr(null);
     setLoading(true);
     try {
-      await supabase.auth.signOut();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password.trim(),
+      let cleanEmail = email.trim().toLowerCase();
+      // Auto-correct common variations of admin email
+      if (
+        cleanEmail === "admin" ||
+        cleanEmail === "admin@" ||
+        cleanEmail === "admin@admin" ||
+        cleanEmail === "admin@admin." ||
+        cleanEmail === "admin@admin.co"
+      ) {
+        cleanEmail = "admin@admin.com";
+        setEmail("admin@admin.com");
+      }
+
+      if (!cleanEmail.includes("@") || !cleanEmail.includes(".")) {
+        throw new Error("Please enter a valid email address with a domain (e.g. admin@admin.com).");
+      }
+
+      const cleanPassword = password.trim();
+
+      // 30-second timeout to allow international Supabase Cloud TLS + bcrypt hashing
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Authentication request timed out after 30 seconds. Please check your internet connection or try again.")),
+          30000
+        )
+      );
+
+      const signInPromise = supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
       });
+
+      const { data, error } = (await Promise.race([signInPromise, timeoutPromise])) as any;
       if (error) throw error;
+
       if (data.user?.email !== "admin@admin.com") {
         const { data: roleData } = await supabase
           .from("user_roles")
@@ -116,7 +145,7 @@ function AuthPage() {
           .maybeSingle();
         if (!roleData) {
           await supabase.auth.signOut();
-          throw new Error("Access Denied: This account does not have admin permissions.");
+          throw new Error("Access Denied: This account does not have admin permissions. If you are a student or team leader, please sign in via the Team Portal.");
         }
       }
 
@@ -135,6 +164,12 @@ function AuthPage() {
     }
   };
 
+  const handleFillDemoAdmin = () => {
+    setEmail("admin@admin.com");
+    setPassword("Ideathon!2026#Judge");
+    setErr(null);
+  };
+
   return (
     <div className="min-h-screen bg-[#0a0a14] text-slate-100 flex flex-col items-center justify-between px-4 py-8">
       <div className="w-full max-w-md my-auto space-y-6">
@@ -150,6 +185,27 @@ function AuthPage() {
           <p className="mt-2 text-sm text-slate-400">
             Authorized administrative access for judges and organizing committee.
           </p>
+        </div>
+
+        {/* Quick Admin Credential Helper */}
+        <div className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3.5 text-xs text-slate-300 backdrop-blur">
+          <div className="flex items-center justify-between gap-2">
+            <div className="space-y-0.5">
+              <div className="font-semibold text-amber-300 flex items-center gap-1.5">
+                <span>👑</span> Official Admin Credentials
+              </div>
+              <div className="text-[11px] text-slate-400 font-mono">
+                admin@admin.com
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleFillDemoAdmin}
+              className="rounded-lg border border-amber-300/40 bg-amber-300/15 px-3 py-1.5 text-[11px] font-bold text-amber-300 hover:bg-amber-300/25 transition cursor-pointer shadow-sm"
+            >
+              Auto-fill Credentials
+            </button>
+          </div>
         </div>
 
         <form onSubmit={submit} className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-6 backdrop-blur">
@@ -200,13 +256,14 @@ function AuthPage() {
           </button>
         </form>
 
-        <p className="text-center text-xs text-slate-500">
-          Admin access only. Team Leaders can access their dashboard on the{" "}
-          <Link to="/team" className="text-amber-300 underline hover:text-amber-200">
-            Team Portal
-          </Link>
-          .
-        </p>
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3.5 text-center text-xs text-slate-400 space-y-1">
+          <p>
+            Are you a student or Team Leader? Access your submission dashboard on the{" "}
+            <Link to="/team" className="font-semibold text-amber-300 underline hover:text-amber-200">
+              Team Portal →
+            </Link>
+          </p>
+        </div>
       </div>
 
       <Footer className="mt-8 border-t-0 pt-0 pb-0" showLogo={false} />

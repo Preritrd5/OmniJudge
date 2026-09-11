@@ -4,24 +4,34 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
   beforeLoad: async () => {
-    const { data, error } = await supabase.auth.getUser();
-    if (error || !data.user) {
+    let user: any = null;
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session?.user) {
+      user = sessionData.session.user;
+    } else {
+      const { data: userData } = await supabase.auth.getUser();
+      user = userData?.user;
+    }
+
+    if (!user) {
       throw redirect({ to: "/auth" });
     }
-    if (data.user.email === "admin@admin.com") {
-      return { user: data.user };
+
+    if (user.email === "admin@admin.com") {
+      return { user };
     }
+
     const { data: roleData } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", data.user.id)
+      .eq("user_id", user.id)
       .eq("role", "admin")
       .maybeSingle();
 
     if (!roleData) {
       throw redirect({ to: "/auth" });
     }
-    return { user: data.user };
+    return { user };
   },
   component: () => <Outlet />,
 });

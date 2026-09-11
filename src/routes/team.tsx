@@ -268,6 +268,44 @@ function TeamPortal() {
     return () => clearInterval(interval);
   }, [teamData?.id, sessionEmail, teamData?.name]);
 
+  const applyTeamData = (team: any, email: string, token?: string | null) => {
+    const leaderName = team.profile?.leaderName || team.name || "Team Leader";
+    if (token) {
+      setSessionToken(token);
+      setTeamTabSession({
+        email,
+        teamName: team.name,
+        leaderName,
+        sessionToken: token,
+        teamId: team.id,
+      });
+    }
+    setSessionEmail(email);
+    setTeamData(team);
+    if (team.id) {
+      loadNotifications(team.id, token || sessionToken);
+    }
+    const p = (team.profile || {}) as any;
+    setSessionLeaderName(p.leaderName || team.name || "Team Leader");
+    setSelectedTopic(p.category || "");
+    setProjectTitle(p.projectTitle || "");
+    setProjectDescription(p.projectDescription || "");
+    setLeaderPhone(p.leaderPhone || "");
+    if (Array.isArray(p.members) && p.members.length > 0) {
+      setMembers(
+        p.members.map((m: any, idx: number) => {
+          if (typeof m === "string") {
+            const parts = m.split(" - ");
+            return { id: String(idx), name: parts[0] || m, role: parts[1] || "Core Member" };
+          }
+          return { id: String(idx), name: m.name || "", role: m.role || "Core Member" };
+        })
+      );
+    } else {
+      setMembers([]);
+    }
+  };
+
   const loadDashboard = async (email: string, teamName?: string, token?: string | null) => {
     const currentReqId = ++dashboardReqIdRef.current;
     setDashboardLoading(true);
@@ -286,40 +324,7 @@ function TeamPortal() {
       if (!stored?.email || stored.email !== email) return;
 
       if (res.found && res.team) {
-        if (res.sessionToken) {
-          setSessionToken(res.sessionToken);
-          setTeamTabSession({
-            email,
-            teamName: res.team.name,
-            leaderName: res.team.profile?.leaderName || "",
-            sessionToken: res.sessionToken,
-            teamId: res.team.id,
-          });
-        }
-        setTeamData(res.team);
-        if (res.team.id) {
-          loadNotifications(res.team.id, res.sessionToken || activeToken);
-        }
-        const p = (res.team.profile || {}) as any;
-        // Unconditionally initialize all fields for THIS team; missing fields reset to blank space
-        setSessionLeaderName(p.leaderName || res.team.name || "Team Leader");
-        setSelectedTopic(p.category || "");
-        setProjectTitle(p.projectTitle || "");
-        setProjectDescription(p.projectDescription || "");
-        setLeaderPhone(p.leaderPhone || "");
-        if (Array.isArray(p.members) && p.members.length > 0) {
-          setMembers(
-            p.members.map((m: any, idx: number) => {
-              if (typeof m === "string") {
-                const parts = m.split(" - ");
-                return { id: String(idx), name: parts[0] || m, role: parts[1] || "Core Member" };
-              }
-              return { id: String(idx), name: m.name || "", role: m.role || "Core Member" };
-            })
-          );
-        } else {
-          setMembers([]);
-        }
+        applyTeamData(res.team, email, res.sessionToken || activeToken);
       }
     } catch (e: any) {
       console.error("Dashboard error:", e);
@@ -356,31 +361,17 @@ function TeamPortal() {
         throw new Error("Please enter both your Team Name and Leader Email.");
       }
 
+      if (!email.includes("@") || !email.split("@")[1]?.includes(".")) {
+        throw new Error("Please enter a valid leader email with a domain (e.g. leader@gmail.com).");
+      }
+
       const res = await getDashboardFn({ data: { email, teamName } });
       if (!res.found || !res.team) {
         throw new Error("No registered team found matching this Team Name and Email. Please check your credentials or contact the administrator.");
       }
 
-      const leaderName = res.team?.profile?.leaderName || "";
-      const token = res.sessionToken || "";
-
-      // Store session strictly in THIS tab's sessionStorage
-      setTeamTabSession({
-        email,
-        teamName: res.team.name,
-        leaderName,
-        sessionToken: token,
-        teamId: res.team.id,
-      });
-
-      setSessionEmail(email);
-      setSessionToken(token);
-      if (leaderName) {
-        setSessionLeaderName(leaderName);
-      }
-      setTeamData(res.team);
-
-      await loadDashboard(email, res.team.name, token);
+      // Apply team data immediately without making a duplicate remote network call
+      applyTeamData(res.team, email, res.sessionToken || "");
     } catch (e: any) {
       setLoginError(e?.message || "Sign in failed. Check your Team Name and Leader Email.");
     } finally {

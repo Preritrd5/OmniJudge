@@ -128,7 +128,7 @@ export const buildFeedbackEmail = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { fetchLeaderEmail } = await import("@/lib/team-leader-email-helper.server");
 
-    const { data: team } = await supabaseAdmin.from("teams").select("id, name").eq("id", data.teamId).maybeSingle();
+    const { data: team } = await supabaseAdmin.from("teams").select("id, name, leader_email").eq("id", data.teamId).maybeSingle();
     if (!team) throw new Error("Team not found");
 
     const { data: subs } = await supabaseAdmin
@@ -139,7 +139,7 @@ export const buildFeedbackEmail = createServerFn({ method: "POST" })
       .order("score", { ascending: false })
       .limit(1);
 
-    const email = await fetchLeaderEmail(team.id, team.name);
+    const email = team.leader_email || (await fetchLeaderEmail(team.id, team.name));
     const best = subs?.[0];
 
     if (!best?.result) {
@@ -203,7 +203,11 @@ export const buildFeedbackEmail = createServerFn({ method: "POST" })
     };
   });
 
+const verifiedAdminUserIds = new Set<string>();
+
 async function assertAdmin(userId: string) {
+  if (verifiedAdminUserIds.has(userId)) return;
+
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data } = await supabaseAdmin
     .from("user_roles")
@@ -211,17 +215,21 @@ async function assertAdmin(userId: string) {
     .eq("user_id", userId)
     .eq("role", "admin")
     .maybeSingle();
-  if (data) return;
+  if (data) {
+    verifiedAdminUserIds.add(userId);
+    return;
+  }
 
   // Fallback: check if user account is admin@admin.com
   const { data: userRes } = await supabaseAdmin.auth.admin.getUserById(userId);
   if (userRes?.user?.email === "admin@admin.com") {
     try {
       await supabaseAdmin.from("user_roles").upsert(
-        { user_id: userId, role: "admin" },
+        { user_id: userId, role_name: "admin" } as any,
         { onConflict: "user_id,role" }
       );
     } catch {}
+    verifiedAdminUserIds.add(userId);
     return;
   }
 
@@ -234,11 +242,11 @@ export const listTeams = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     await assertAdmin(context.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { fetchLeaderEmail } = await import("@/lib/team-leader-email-helper.server");
+    const { getFallbackEmail } = await import("@/lib/team-leader-email-helper.server");
     const { getTeamProfile, findTeamProfileByEmail } = await import("@/lib/team-store.server");
     const { data: teams, error } = await supabaseAdmin
       .from("teams")
-      .select("id, name, created_at")
+      .select("id, name, created_at, leader_email")
       .order("created_at", { ascending: false });
     if (error) throw error;
     const { data: subs, error: sErr } = await supabaseAdmin
@@ -247,56 +255,52 @@ export const listTeams = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false });
     if (sErr) throw sErr;
     
-    return Promise.all(
-      (teams || []).map(async (t) => {
-        const email = await fetchLeaderEmail(t.id, t.name);
-        const profile = getTeamProfile(t.id) || findTeamProfileByEmail(email);
-        const teamSubs = (subs || []).filter((s) => s.team_id === t.id);
-        const latest = teamSubs[0] || null;
-        const best = teamSubs.reduce<number | null>(
-          (acc, s) => (s.score != null && (acc == null || s.score > acc) ? s.score : acc),
-          null,
-        );
-        return {
-          ...t,
-          leader_email: email,
-          leader_name: profile?.leaderName || (t as any).leader_name || null,
-          leader_phone: profile?.leaderPhone || null,
-          members: profile?.members || [],
-          project_title: profile?.projectTitle || null,
-          project_description: profile?.projectDescription || null,
-          submissions: teamSubs,
-          latest,
-          bestScore: best,
-        };
-      })
-    );
+    return (teams || []).map((t) => {
+      const email = t.leader_email || getTeamProfile(t.id)?.leaderEmail || getFallbackEmail(t.name);
+      const profile = getTeamProfile(t.id) || findTeamProfileByEmail(email);
+      const teamSubs = (subs || []).filter((s) => s.team_id === t.id);
+      const latest = teamSubs[0] || null;
+      const best = teamSubs.reduce<number | null>(
+        (acc, s) => (s.score != null && (acc == null || s.score > acc) ? s.score : acc),
+        null,
+      );
+      return {
+        ...t,
+        leader_email: email,
+        leader_name: profile?.leaderName || (t as any).leader_name || null,
+        leader_phone: profile?.leaderPhone || null,
+        members: profile?.members || [],
+        project_title: profile?.projectTitle || null,
+        project_description: profile?.projectDescription || null,
+        submissions: teamSubs,
+        latest,
+        bestScore: best,
+      };
+    });
   });
 
 export const listPublicTeams = createServerFn({ method: "GET" })
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { fetchLeaderEmail } = await import("@/lib/team-leader-email-helper.server");
+    const { getFallbackEmail } = await import("@/lib/team-leader-email-helper.server");
     const { data: teams, error } = await supabaseAdmin
       .from("teams")
-      .select("id, name")
+      .select("id, name, leader_email")
       .order("name");
     if (error) throw error;
     
-    return Promise.all(
-      (teams || []).map(async (t) => {
-        const email = await fetchLeaderEmail(t.id, t.name);
-        const [local, domain] = email.split("@");
-        let maskedLocal = local;
-        if (local.length > 3) {
-          maskedLocal = local.slice(0, 2) + "*".repeat(local.length - 4) + local.slice(-2);
-        } else {
-          maskedLocal = local[0] + "*".repeat(local.length - 1);
-        }
-        const maskedEmail = `${maskedLocal}@${domain}`;
-        return { id: t.id, name: t.name, emailHint: maskedEmail };
-      })
-    );
+    return (teams || []).map((t) => {
+      const email = t.leader_email || getFallbackEmail(t.name);
+      const [local, domain] = email.split("@");
+      let maskedLocal = local || "";
+      if (maskedLocal.length > 3) {
+        maskedLocal = maskedLocal.slice(0, 2) + "*".repeat(maskedLocal.length - 4) + maskedLocal.slice(-2);
+      } else if (maskedLocal.length > 0) {
+        maskedLocal = maskedLocal[0] + "*".repeat(maskedLocal.length - 1);
+      }
+      const maskedEmail = domain ? `${maskedLocal}@${domain}` : email;
+      return { id: t.id, name: t.name, emailHint: maskedEmail };
+    });
   });
 
 export const addTeam = createServerFn({ method: "POST" })
@@ -335,17 +339,20 @@ export const verifyTeamLeaderEmail = createServerFn({ method: "POST" })
     z.object({ teamId: z.string().uuid(), email: z.string().trim().email() }).parse(d),
   )
   .handler(async ({ data }) => {
-    const { fetchLeaderEmail } = await import("@/lib/team-leader-email-helper.server");
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: team } = await supabaseAdmin
       .from("teams")
-      .select("name")
+      .select("name, leader_email")
       .eq("id", data.teamId)
       .maybeSingle();
     if (!team) return { verified: false, error: "Team not found" };
     
-    const correctEmail = await fetchLeaderEmail(data.teamId, team.name);
-    const isCorrect = correctEmail.toLowerCase() === data.email.toLowerCase();
+    let correctEmail = team.leader_email;
+    if (!correctEmail) {
+      const { fetchLeaderEmail } = await import("@/lib/team-leader-email-helper.server");
+      correctEmail = await fetchLeaderEmail(data.teamId, team.name);
+    }
+    const isCorrect = correctEmail ? correctEmail.toLowerCase() === data.email.toLowerCase() : false;
     return { verified: isCorrect };
   });
 
